@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Users: profiles (rizzTitle, eloRating, totalGames)
+    // ELO LOCK: Only Cloud Functions can update elo_rating.
+    // Clients can read/write their own profile except elo_rating.
+    // -------------------------------------------------------------------------
+    match /users/{userId} {
+      allow read, create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['elo_rating']);
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // -------------------------------------------------------------------------
+    // Matchmaking queue: users add themselves; pairing user deletes both
+    // -------------------------------------------------------------------------
+    match /matchmaking/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Matches: history (playerIds, winnerId, status, targetPhrase)
+    // SHARDING: Players can only read matches where player_ids contains them.
+    // Create allowed for matchmaking; update/delete server-only (Cloud Functions).
+    // -------------------------------------------------------------------------
+    match /matches/{matchId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.get('player_ids', []);
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+
+      // -----------------------------------------------------------------------
+      // Chat subcollection: matches/{matchId}/chat/{messageId}
+      // SHARDING: Only players in this match can read/write chat.
+      // Players create user messages; Cloud Functions add AI replies.
+      // -----------------------------------------------------------------------
+      match /chat/{messageId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.get('player_ids', []);
+        allow create: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.get('player_ids', [])
+          && request.resource.data.sender_uid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
