@@ -36,10 +36,15 @@ class AuthService {
     );
     
     await _databaseService.createUserProfile(user);
+    await _databaseService.setupPresence(uid);
     return user;
   }
 
   Future<void> signOut() async {
+    final uid = _firebaseAuth.currentUser?.uid;
+    if (uid != null) {
+      await _databaseService.goOffline(uid);
+    }
     await _firebaseAuth.signOut();
   }
 }

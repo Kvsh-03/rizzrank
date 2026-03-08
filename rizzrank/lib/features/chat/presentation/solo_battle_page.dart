@@ -57,8 +57,9 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
     _msgCounter++;
     _messages.add(ChatMessage(
       key: 'msg-$_msgCounter',
-      role: 'ai',
-      text: text,
+      senderUid: 'ai_${widget.characterId}',
+      role: 'model',
+      content: text,
       timestamp: DateTime.now().millisecondsSinceEpoch,
     ));
   }
@@ -84,8 +85,9 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
       _msgCounter++;
       _messages.add(ChatMessage(
         key: 'msg-$_msgCounter',
+        senderUid: 'local_user',
         role: 'user',
-        text: text,
+        content: text,
         timestamp: DateTime.now().millisecondsSinceEpoch,
         rizzDelta: rizzDelta,
       ));

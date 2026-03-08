@@ -14,31 +14,34 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'PLACEHOLDER_RUN_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:android:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'rizzrank-placeholder',
-    storageBucket: 'rizzrank-placeholder.appspot.com',
-    databaseURL: 'https://rizzrank-placeholder-default-rtdb.firebaseio.com',
+    apiKey: 'AIzaSyD22vLRdxm78bR91QRAHYyRdZLDXSPZ0Tg',
+    appId: '1:371372966416:android:8adc920b56317d7e6f4095',
+    messagingSenderId: '371372966416',
+    projectId: 'rizzrank-f52cd',
+    databaseURL: 'https://rizzrank-f52cd-default-rtdb.firebaseio.com',
+    storageBucket: 'rizzrank-f52cd.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'PLACEHOLDER_RUN_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:ios:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'rizzrank-placeholder',
-    storageBucket: 'rizzrank-placeholder.appspot.com',
+    apiKey: 'AIzaSyBWkA5bVVI5CUoDKYbpVennn3taoAkKRnA',
+    appId: '1:371372966416:ios:be2c393dc9e3e2e26f4095',
+    messagingSenderId: '371372966416',
+    projectId: 'rizzrank-f52cd',
+    databaseURL: 'https://rizzrank-f52cd-default-rtdb.firebaseio.com',
+    storageBucket: 'rizzrank-f52cd.firebasestorage.app',
+    iosClientId: '371372966416-nt8jo8om1g15i4kkmmsi10vi0g0c07j2.apps.googleusercontent.com',
     iosBundleId: 'com.example.rizzrank',
-    databaseURL: 'https://rizzrank-placeholder-default-rtdb.firebaseio.com',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'PLACEHOLDER_RUN_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:macos:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'rizzrank-placeholder',
-    storageBucket: 'rizzrank-placeholder.appspot.com',
+    apiKey: 'AIzaSyBWkA5bVVI5CUoDKYbpVennn3taoAkKRnA',
+    appId: '1:371372966416:ios:be2c393dc9e3e2e26f4095',
+    messagingSenderId: '371372966416',
+    projectId: 'rizzrank-f52cd',
+    databaseURL: 'https://rizzrank-f52cd-default-rtdb.firebaseio.com',
+    storageBucket: 'rizzrank-f52cd.firebasestorage.app',
+    iosClientId: '371372966416-nt8jo8om1g15i4kkmmsi10vi0g0c07j2.apps.googleusercontent.com',
     iosBundleId: 'com.example.rizzrank',
-    databaseURL: 'https://rizzrank-placeholder-default-rtdb.firebaseio.com',
   );
+
 }

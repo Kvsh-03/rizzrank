@@ -1,38 +1,53 @@
-import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Firebase-ready chat message for RTDB path:
-/// matches/{matchId}/players/{uid}/messages/{pushId}/
+/// Firestore chat message for matches/{matchId}/chat/{autoId}.
+///
+/// Clients create user messages (role='user') with their own sender_uid.
+/// Cloud Functions create AI replies (role='model') with sender_uid='ai_{characterId}'.
 class ChatMessage {
   final String? key;
+  final String senderUid;
   final String role;
-  final String text;
+  final String content;
+  final int? tokenCount;
   final int timestamp;
   final int? rizzDelta;
 
   const ChatMessage({
     this.key,
+    required this.senderUid,
     required this.role,
-    required this.text,
+    required this.content,
+    this.tokenCount,
     required this.timestamp,
     this.rizzDelta,
   });
 
-  factory ChatMessage.fromSnapshot(DataSnapshot snapshot) {
-    final key = snapshot.key;
-    final value = snapshot.value;
-    if (value == null || value is! Map) {
-      throw ArgumentError('Invalid message snapshot: expected Map');
-    }
-    final map = Map<String, dynamic>.from(value);
-    return ChatMessage.fromMap(key, map);
+  factory ChatMessage.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    return ChatMessage.fromMap(doc.id, data);
   }
 
   factory ChatMessage.fromMap(String? key, Map<String, dynamic> map) {
+    final tsRaw = map['timestamp'];
+    int timestamp;
+    if (tsRaw is Timestamp) {
+      timestamp = tsRaw.millisecondsSinceEpoch;
+    } else if (tsRaw is int) {
+      timestamp = tsRaw;
+    } else {
+      timestamp = DateTime.now().millisecondsSinceEpoch;
+    }
+
     return ChatMessage(
       key: key,
+      senderUid: map['sender_uid'] as String? ?? '',
       role: map['role'] as String? ?? 'user',
-      text: map['text'] as String? ?? '',
-      timestamp: _parseInt(map['timestamp'], 0),
+      content: map['content'] as String? ?? map['text'] as String? ?? '',
+      tokenCount: map['token_count'] != null
+          ? _parseInt(map['token_count'], 0)
+          : null,
+      timestamp: timestamp,
       rizzDelta: map['rizz_delta'] != null
           ? _parseInt(map['rizz_delta'], 0)
           : null,
@@ -46,26 +61,32 @@ class ChatMessage {
     return int.tryParse(value.toString()) ?? fallback;
   }
 
-  Map<String, dynamic> toMap() {
+  /// Firestore write payload for client-created user messages.
+  Map<String, dynamic> toFirestore() {
     return {
+      'sender_uid': senderUid,
       'role': role,
-      'text': text,
-      'timestamp': timestamp,
-      if (rizzDelta != null) 'rizz_delta': rizzDelta,
+      'content': content,
+      if (tokenCount != null) 'token_count': tokenCount,
+      'timestamp': FieldValue.serverTimestamp(),
     };
   }
 
   ChatMessage copyWith({
     String? key,
+    String? senderUid,
     String? role,
-    String? text,
+    String? content,
+    int? tokenCount,
     int? timestamp,
     int? rizzDelta,
   }) {
     return ChatMessage(
       key: key ?? this.key,
+      senderUid: senderUid ?? this.senderUid,
       role: role ?? this.role,
-      text: text ?? this.text,
+      content: content ?? this.content,
+      tokenCount: tokenCount ?? this.tokenCount,
       timestamp: timestamp ?? this.timestamp,
       rizzDelta: rizzDelta ?? this.rizzDelta,
     );
