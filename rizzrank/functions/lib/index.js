@@ -1,23 +1,4 @@
 "use strict";
-/**
- * RizzRank Date Race - Cloud Functions
- *
- * Exports:
- *   - onUserMessageSent: Firestore trigger on matches/{matchId}/players/{playerId}/messages/{messageId}
- *   - findMatch, leaveQueue: HTTPS callables for matchmaking
- *   - cleanupExpiredMatchmaking: Scheduled cleanup
- *   - checkMatchTimeouts: Scheduled match timeout enforcement
- *
- * Pipeline (onUserMessageSent):
- *   1. Read AI character from Firestore ai_models collection (fallback to hardcoded)
- *   2. Gemini 2.0 Flash generates AI reply
- *   3. Gemini Flash-Lite judges the user message (Turn Score formula)
- *   4. RTDB active_states/{matchId}/p1_vibe or p2_vibe is updated
- *   5. If vibe > 100 and date-ask detected: finalizeMatch is called
- *
- * Scoring formula:
- *   Turn Score = [(Base Good x Persona Mult) x Timing Mult] - Base Bad
- */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -53,6 +34,33 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkMatchTimeouts = exports.seedTraits = exports.seedAiModels = exports.forfeitMatch = exports.onPresenceOffline = exports.onRTDBMessageSent = exports.onQueueWrite = exports.leaveQueue = exports.joinQueue = void 0;
+/**
+ * Load .env from functions directory (for emulator/local).
+ * Production uses Firebase secrets via defineString; .env is ignored when absent.
+ */
+const path = __importStar(require("path"));
+const dotenv_1 = require("dotenv");
+(0, dotenv_1.config)({ path: path.resolve(__dirname, "../.env") });
+(0, dotenv_1.config)({ path: path.resolve(__dirname, "../.env.local") });
+/**
+ * RizzRank Date Race - Cloud Functions
+ *
+ * Exports:
+ *   - onUserMessageSent: Firestore trigger on matches/{matchId}/players/{playerId}/messages/{messageId}
+ *   - findMatch, leaveQueue: HTTPS callables for matchmaking
+ *   - cleanupExpiredMatchmaking: Scheduled cleanup
+ *   - checkMatchTimeouts: Scheduled match timeout enforcement
+ *
+ * Pipeline (onUserMessageSent):
+ *   1. Read AI character from Firestore ai_models collection (fallback to hardcoded)
+ *   2. Gemini 2.0 Flash generates AI reply
+ *   3. Gemini Flash-Lite judges the user message (Turn Score formula)
+ *   4. RTDB active_states/{matchId}/p1_vibe or p2_vibe is updated
+ *   5. If vibe > 100 and date-ask detected: finalizeMatch is called
+ *
+ * Scoring formula:
+ *   Turn Score = [(Base Good x Persona Mult) x Timing Mult] - Base Bad
+ */
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");

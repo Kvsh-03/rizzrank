@@ -166,13 +166,23 @@ class _ChallengerCard extends StatelessWidget {
                     color: Colors.white.withOpacity(0.1),
                     width: 2,
                   ),
-                  image: DecorationImage(
-                    image: avatarUrl.isNotEmpty
-                        ? NetworkImage(avatarUrl)
-                        : const NetworkImage('https://via.placeholder.com/150'),
-                    fit: BoxFit.cover,
-                  ),
+                  color: (avatarUrl.isEmpty || avatarUrl.contains('placeholder'))
+                      ? Colors.grey[800]
+                      : null,
+                  image: (avatarUrl.isNotEmpty && !avatarUrl.contains('placeholder'))
+                      ? DecorationImage(
+                          image: NetworkImage(avatarUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
+                child: (avatarUrl.isEmpty || avatarUrl.contains('placeholder'))
+                    ? const Icon(
+                        LucideIcons.user,
+                        color: Colors.white54,
+                        size: 36,
+                      )
+                    : null,
               ),
               const SizedBox(width: 16),
               Expanded(

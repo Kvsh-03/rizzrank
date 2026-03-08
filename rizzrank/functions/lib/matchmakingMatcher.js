@@ -144,8 +144,10 @@ async function tryMatchPair(uid1, uid2, entry1, entry2, pref1, pref2) {
 }
 async function processQueue(instanceId) {
     const lockAcquired = await acquireLock(instanceId);
-    if (!lockAcquired)
-        return;
+    if (!lockAcquired) {
+        await new Promise((r) => setTimeout(r, 1500));
+        return processQueue(`matcher-retry-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    }
     try {
         const now = Date.now();
         for (const pref of PREFERENCES) {

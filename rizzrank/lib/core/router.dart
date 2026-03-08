@@ -54,14 +54,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isGoingToLogin =
           state.matchedLocation == '/login' || state.matchedLocation == '/';
 
-      if (!isAuth && !isGoingToLogin) {
-        return '/login';
-      }
-
-      if (isAuth && isGoingToLogin) {
-        return '/dashboard';
-      }
-
+      if (!isAuth && !isGoingToLogin) return '/login';
+      if (isAuth && isGoingToLogin) return '/dashboard';
       return null;
     },
     routes: [

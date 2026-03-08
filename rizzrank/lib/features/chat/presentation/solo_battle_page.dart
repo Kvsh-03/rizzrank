@@ -10,6 +10,9 @@ import '../../../core/widgets/glass_card.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/heart_meter.dart';
 
+bool _isPlaceholderAvatar(String url) =>
+    url.isEmpty || url.contains('placeholder');
+
 class SoloBattlePage extends StatefulWidget {
   const SoloBattlePage({super.key, required this.characterId});
 
@@ -173,40 +176,247 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
     }
 
     final String name = _aiData!['name'] ?? 'Unknown AI';
-    final String role = _aiData!['role'] ?? 'Mystery';
-    final String description = _aiData!['description'] ?? 'An enigma.';
     final String avatarUrl =
         _aiData!['avatar_url'] ??
         _aiData!['avatarUrl'] ??
-        'https://via.placeholder.com/150';
-
-    final isKeyboardVisible =
-        MediaQuery.of(context).viewInsets.bottom > 0 ||
-        _focusNode.hasFocus;
+        '';
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: AppTheme.backgroundDark,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () => context.go('/dashboard'),
-        ),
-        title: const Text(
-          'RizzRank',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              // Model header at top (level with SafeArea)
+              SafeArea(
+                bottom: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundDark,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: AppTheme.primary.withOpacity(0.2),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppTheme.primary.withOpacity(0.5),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: ClipOval(
+                              child: _isPlaceholderAvatar(avatarUrl)
+                                  ? Container(
+                                      color: Colors.grey[800],
+                                      child: const Icon(
+                                        LucideIcons.user,
+                                        color: Colors.white54,
+                                        size: 24,
+                                      ),
+                                    )
+                                  : Image.network(
+                                      avatarUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: Colors.grey[800],
+                                        child: const Icon(
+                                          LucideIcons.user,
+                                          color: Colors.white54,
+                                          size: 24,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.greenAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppTheme.backgroundDark,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Heart Meter
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+                child: HeartMeter(score: _affection),
+              ),
+
+              // Chat Messages
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  itemCount: _messages.length + (_isTyping ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _messages.length && _isTyping) {
+                      return _TypingIndicator(avatarUrl: avatarUrl, name: name);
+                    }
+                    return ChatBubble(
+                      message: _messages[index],
+                      aiAvatarUrl: avatarUrl,
+                      aiName: name,
+                    );
+                  },
+                ),
+              ),
+
+              // Input Bar
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundDark.withOpacity(0.95),
+                  border: Border(
+                    top: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
+                  ),
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          alignment: Alignment.centerRight,
+                          children: [
+                            TextField(
+                              controller: _textController,
+                              focusNode: _focusNode,
+                              onTap: () => _scrollToBottom(),
+                              decoration: InputDecoration(
+                                hintText: 'Type your smooth response...',
+                                hintStyle: TextStyle(
+                                  color: Colors.white.withOpacity(0.3),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.08),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide(
+                                    color: AppTheme.primary.withOpacity(0.3),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide(
+                                    color: AppTheme.primary.withOpacity(0.5),
+                                    width: 2,
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  14,
+                                  48,
+                                  14,
+                                ),
+                              ),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                              onSubmitted: (_) => _sendMessage(),
+                            ),
+                            Positioned(
+                              right: 6,
+                              child: GestureDetector(
+                                onTap: _sendMessage,
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: const BoxDecoration(
+                                    color: AppTheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    LucideIcons.send,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.primary.withOpacity(0.1),
+                          border: Border.all(
+                            color: AppTheme.primary.withOpacity(0.3),
+                          ),
+                        ),
+                        child: const Icon(
+                          LucideIcons.wand2,
+                          color: AppTheme.primary,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // Back button overlay at top left
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 16,
+            child: IconButton(
+              icon: const Icon(LucideIcons.arrowLeft),
+              onPressed: () => context.go('/dashboard'),
+            ),
+          ),
+          // FINISH button overlay at top right
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 16,
             child: InkWell(
               onTap: () => context.go('/results/victory/solo'),
               borderRadius: BorderRadius.circular(8),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: Colors.greenAccent.withOpacity(0.2),
@@ -236,381 +446,7 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
         ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final useCompactHeader = isKeyboardVisible ||
-              constraints.maxHeight < 550;
-
-          return Column(
-            children: [
-              // Compact header when keyboard visible, full header otherwise
-              if (useCompactHeader)
-                _CompactSoloChatHeader(
-                avatarUrl: avatarUrl,
-                name: name,
-                onFinish: () => context.go('/results/victory/solo'),
-              )
-            else ...[
-            // AI Profile Header
-            Container(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppTheme.primary.withOpacity(0.1), Colors.transparent],
-              ),
-            ),
-            child: Column(
-              children: [
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primary.withOpacity(0.4),
-                            blurRadius: 24,
-                            spreadRadius: 4,
-                          ),
-                          BoxShadow(
-                            color: Colors.pinkAccent.withOpacity(0.2),
-                            blurRadius: 24,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: Container(
-                        width: 104,
-                        height: 104,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppTheme.primary.withOpacity(0.5),
-                            width: 2,
-                          ),
-                        ),
-                        child: ClipOval(
-                          child: Image.network(
-                            avatarUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.grey[800],
-                              child: const Icon(
-                                LucideIcons.user,
-                                color: Colors.white54,
-                                size: 40,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 2,
-                      right: 2,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: Colors.greenAccent,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppTheme.backgroundDark,
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$role \u2022 "${description.split('.').first}"',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 13,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _PersonalityTag(
-                      label: 'Cinephile',
-                      color: AppTheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    _PersonalityTag(
-                      label: 'Night Owl',
-                      color: Colors.pinkAccent,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            ),
-
-            // Heart Meter
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: HeartMeter(score: _affection),
-            ),
-            ],
-
-            // Chat Messages
-            Expanded(
-              child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(16),
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
-              itemCount: _messages.length + (_isTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length && _isTyping) {
-                  return _TypingIndicator(avatarUrl: avatarUrl, name: name);
-                }
-                return ChatBubble(
-                  message: _messages[index],
-                  aiAvatarUrl: avatarUrl,
-                  aiName: name,
-                );
-              },
-              ),
-            ),
-
-            // Input Bar
-            Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.backgroundDark.withOpacity(0.95),
-              border: Border(
-                top: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
-              ),
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Stack(
-                      alignment: Alignment.centerRight,
-                      children: [
-                        TextField(
-                          controller: _textController,
-                          focusNode: _focusNode,
-                          onTap: () => _scrollToBottom(),
-                          decoration: InputDecoration(
-                            hintText: 'Type your smooth response...',
-                            hintStyle: TextStyle(
-                              color: Colors.white.withOpacity(0.3),
-                            ),
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.08),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide(
-                                color: AppTheme.primary.withOpacity(0.3),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide(
-                                color: AppTheme.primary.withOpacity(0.5),
-                                width: 2,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.fromLTRB(
-                              20,
-                              14,
-                              48,
-                              14,
-                            ),
-                          ),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
-                          onSubmitted: (_) => _sendMessage(),
-                        ),
-                        Positioned(
-                          right: 6,
-                          child: GestureDetector(
-                            onTap: _sendMessage,
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: const BoxDecoration(
-                                color: AppTheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                LucideIcons.send,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppTheme.primary.withOpacity(0.1),
-                      border: Border.all(
-                        color: AppTheme.primary.withOpacity(0.3),
-                      ),
-                    ),
-                    child: const Icon(
-                      LucideIcons.wand2,
-                      color: AppTheme.primary,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _CompactSoloChatHeader extends StatelessWidget {
-  const _CompactSoloChatHeader({
-    required this.avatarUrl,
-    required this.name,
-    required this.onFinish,
-  });
-
-  final String avatarUrl;
-  final String name;
-  final VoidCallback onFinish;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.backgroundDark,
-        border: Border(
-          bottom: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
-        ),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.grey[800],
-            child: ClipOval(
-              child: Image.network(
-                avatarUrl,
-                fit: BoxFit.cover,
-                width: 32,
-                height: 32,
-                errorBuilder: (_, __, ___) => const Icon(
-                  LucideIcons.user,
-                  color: Colors.white54,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          InkWell(
-            onTap: onFinish,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.greenAccent.withOpacity(0.2),
-                border: Border.all(
-                  color: Colors.greenAccent.withOpacity(0.4),
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'FINISH',
-                    style: TextStyle(
-                      color: Colors.greenAccent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(
-                    LucideIcons.trophy,
-                    color: Colors.greenAccent,
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PersonalityTag extends StatelessWidget {
-  const _PersonalityTag({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
       ),
     );
   }
@@ -631,8 +467,26 @@ class _TypingIndicator extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundImage: NetworkImage(avatarUrl),
-            onBackgroundImageError: (_, __) {},
+            backgroundColor: Colors.grey[800],
+            child: _isPlaceholderAvatar(avatarUrl)
+                ? const Icon(
+                    LucideIcons.user,
+                    color: Colors.white54,
+                    size: 20,
+                  )
+                : ClipOval(
+                    child: Image.network(
+                      avatarUrl,
+                      fit: BoxFit.cover,
+                      width: 32,
+                      height: 32,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        LucideIcons.user,
+                        color: Colors.white54,
+                        size: 20,
+                      ),
+                    ),
+                  ),
           ),
           const SizedBox(width: 8),
           GlassCard(

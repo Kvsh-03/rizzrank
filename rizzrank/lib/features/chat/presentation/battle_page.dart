@@ -12,6 +12,9 @@ import 'widgets/chat_bubble.dart';
 import 'widgets/heart_meter.dart';
 import 'widgets/opponent_ghost.dart';
 
+bool _isPlaceholderAvatar(String url) =>
+    url.isEmpty || url.contains('placeholder');
+
 class BattlePage extends ConsumerStatefulWidget {
   const BattlePage({super.key, required this.matchId});
 
@@ -27,6 +30,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
   final _focusNode = FocusNode();
   Timer? _typingDebounce;
   bool _isForfeiting = false;
+  bool _hasForfeited = false;
 
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
@@ -87,7 +91,10 @@ class _BattlePageState extends ConsumerState<BattlePage> {
 
   Future<void> _forfeit() async {
     if (_isForfeiting) return;
-    setState(() => _isForfeiting = true);
+    setState(() {
+      _isForfeiting = true;
+      _hasForfeited = true;
+    });
     try {
       await ref.read(matchmakingServiceProvider).forfeitMatch(widget.matchId);
       if (mounted) context.go('/results/defeat/${widget.matchId}');
@@ -143,14 +150,17 @@ class _BattlePageState extends ConsumerState<BattlePage> {
     });
 
     // Navigate away if active_match_id changes (user cancelled, match invalidated)
+    // Skip when we just forfeited - we navigate to results ourselves
+    // When active_match_id becomes null, the match ended (forfeit/win/draw) - do NOT
+    // navigate to dashboard; let liveMatchStreamProvider navigate to results/victory.
     ref.listen(currentUserProvider, (prev, next) {
+      if (_hasForfeited) return;
       final u = next.value;
       if (u != null && u.activeMatchId != widget.matchId) {
         if (u.activeMatchId == null || u.activeMatchId!.isEmpty) {
-          if (mounted) context.go('/dashboard');
-        } else {
-          if (mounted) context.go('/chat/${u.activeMatchId}');
+          return; // Match ended - liveMatchStreamProvider will navigate to results
         }
+        if (mounted) context.go('/chat/${u.activeMatchId}');
       }
     });
 
@@ -174,16 +184,13 @@ class _BattlePageState extends ConsumerState<BattlePage> {
           orElse: () => {
             'role': 'Mystery',
             'description': 'An enigma.',
-            'avatar_url': 'https://via.placeholder.com/150',
+            'avatar_url': '',
           },
         );
-        final aiCharRole = aiChar['role'] as String? ?? 'Mystery';
-        final aiCharDescription =
-            aiChar['description'] as String? ?? 'An enigma.';
         final aiCharAvatar =
             aiChar['avatar_url'] as String? ??
             aiChar['avatarUrl'] as String? ??
-            'https://via.placeholder.com/150';
+            '';
         final myVibe = liveMatch.vibeFor(user.uid);
         final opponentUid = liveMatch.getOpponentUid(user.uid);
         final opponentVibe = opponentUid != null
@@ -191,211 +198,100 @@ class _BattlePageState extends ConsumerState<BattlePage> {
             : 0;
         final aiIsTyping = liveMatch.isTyping['ai_${user.uid}'] == true;
 
-        final isKeyboardVisible =
-            MediaQuery.of(context).viewInsets.bottom > 0 ||
-            _focusNode.hasFocus;
-
         return Scaffold(
           resizeToAvoidBottomInset: true,
           backgroundColor: AppTheme.backgroundDark,
-          appBar: AppBar(
-            leading: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: AppTheme.primary.withOpacity(0.1),
-                  border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-                ),
-                child: const Icon(
-                  LucideIcons.menu,
-                  color: AppTheme.primary,
-                  size: 20,
-                ),
-              ),
-            ),
-            title: const Text(
-              'RizzRank',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.5,
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: InkWell(
-                  onTap: _isForfeiting ? null : _forfeit,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: Colors.redAccent.withOpacity(0.2),
-                      border: Border.all(
-                        color: Colors.redAccent.withOpacity(0.4),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'FORFEIT',
-                          style: TextStyle(
-                            color: Colors.redAccent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          LucideIcons.trophy,
-                          color: Colors.redAccent,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              // Use compact header when keyboard visible, text field focused, or space is tight
-              final useCompactHeader = isKeyboardVisible ||
-                  constraints.maxHeight < 550;
-
-              return Column(
+          body: Stack(
+            children: [
+              Column(
                 children: [
-                  // Compact header when keyboard visible, full header otherwise
-                  if (useCompactHeader)
-                    _CompactChatHeader(
-                      avatarUrl: aiCharAvatar,
-                      name: aiCharName,
-                      isForfeiting: _isForfeiting,
-                      onForfeit: _forfeit,
-                    )
-                  else ...[
-                // AI Profile Header
-                Container(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppTheme.primary.withOpacity(0.1),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primary.withOpacity(0.4),
-                                blurRadius: 24,
-                                spreadRadius: 4,
-                              ),
-                              BoxShadow(
-                                color: Colors.pinkAccent.withOpacity(0.2),
-                                blurRadius: 24,
-                                spreadRadius: 2,
-                              ),
-                            ],
+                  // Model header at top (level with SafeArea)
+                  SafeArea(
+                    bottom: false,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.backgroundDark,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: AppTheme.primary.withOpacity(0.2),
                           ),
-                          child: Container(
-                            width: 104,
-                            height: 104,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppTheme.primary.withOpacity(0.5),
-                                width: 2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppTheme.primary.withOpacity(0.5),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: ClipOval(
+                                  child: _isPlaceholderAvatar(aiCharAvatar)
+                                      ? Container(
+                                          color: Colors.grey[800],
+                                          child: const Icon(
+                                            LucideIcons.user,
+                                            color: Colors.white54,
+                                            size: 24,
+                                          ),
+                                        )
+                                      : Image.network(
+                                          aiCharAvatar,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            color: Colors.grey[800],
+                                            child: const Icon(
+                                              LucideIcons.user,
+                                              color: Colors.white54,
+                                              size: 24,
+                                            ),
+                                          ),
+                                        ),
+                                ),
                               ),
-                            ),
-                            child: ClipOval(
-                              child: Image.network(
-                                aiCharAvatar,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Icon(
-                                    LucideIcons.user,
-                                    color: Colors.white54,
-                                    size: 40,
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Colors.greenAccent,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: AppTheme.backgroundDark,
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                        ),
-                        Positioned(
-                          bottom: 2,
-                          right: 2,
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: Colors.greenAccent,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppTheme.backgroundDark,
-                                width: 3,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              aiCharName,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      aiCharName,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$aiCharRole \u2022 "${aiCharDescription.split('.').first}"',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 13,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _PersonalityTag(
-                          label: 'Cinephile',
-                          color: AppTheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        _PersonalityTag(
-                          label: 'Night Owl',
-                          color: Colors.pinkAccent,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                  ),
 
-                // Heart Meter & Opponent Ghost
+                  // Heart Meter & Opponent Ghost
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Column(
@@ -407,7 +303,6 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                     ],
                   ),
                 ),
-                  ],
 
                   // Chat Messages
                   Expanded(
@@ -444,12 +339,31 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                         horizontal: 16,
                         vertical: 8,
                       ),
-                      child: Row(
+                          child: Row(
                         children: [
                           CircleAvatar(
                             radius: 14,
-                            backgroundImage: NetworkImage(aiCharAvatar),
-                            onBackgroundImageError: (_, __) {},
+                            backgroundColor: Colors.grey[800],
+                            child: _isPlaceholderAvatar(aiCharAvatar)
+                                ? const Icon(
+                                    LucideIcons.user,
+                                    color: Colors.white54,
+                                    size: 20,
+                                  )
+                                : ClipOval(
+                                    child: Image.network(
+                                      aiCharAvatar,
+                                      fit: BoxFit.cover,
+                                      width: 28,
+                                      height: 28,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(
+                                        LucideIcons.user,
+                                        color: Colors.white54,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
                           ),
                           const SizedBox(width: 8),
                           Container(
@@ -588,8 +502,49 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                 ),
                   ),
                 ],
-              );
-            },
+              ),
+              // FORFEIT button overlay at top right
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                right: 16,
+                child: InkWell(
+                  onTap: _isForfeiting ? null : _forfeit,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.redAccent.withOpacity(0.2),
+                      border: Border.all(
+                        color: Colors.redAccent.withOpacity(0.4),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'FORFEIT',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          LucideIcons.trophy,
+                          color: Colors.redAccent,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -600,123 +555,3 @@ class _BattlePageState extends ConsumerState<BattlePage> {
   }
 }
 
-class _CompactChatHeader extends StatelessWidget {
-  const _CompactChatHeader({
-    required this.avatarUrl,
-    required this.name,
-    required this.isForfeiting,
-    required this.onForfeit,
-  });
-
-  final String avatarUrl;
-  final String name;
-  final bool isForfeiting;
-  final VoidCallback onForfeit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.backgroundDark,
-        border: Border(
-          bottom: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
-        ),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.grey[800],
-            child: ClipOval(
-              child: Image.network(
-                avatarUrl,
-                fit: BoxFit.cover,
-                width: 32,
-                height: 32,
-                errorBuilder: (_, __, ___) => const Icon(
-                  LucideIcons.user,
-                  color: Colors.white54,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          InkWell(
-            onTap: isForfeiting ? null : onForfeit,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.redAccent.withOpacity(0.2),
-                border: Border.all(
-                  color: Colors.redAccent.withOpacity(0.4),
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'FORFEIT',
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(
-                    LucideIcons.trophy,
-                    color: Colors.redAccent,
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PersonalityTag extends StatelessWidget {
-  const _PersonalityTag({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
-}

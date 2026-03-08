@@ -1,24 +1,25 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../services/cloud_functions_http_service.dart';
 import '../services/database_service.dart';
 import '../services/matchmaking_service.dart';
 import '../models/user_model.dart';
 import '../models/firestore_match_model.dart';
 
-final firebaseAuthProvider = Provider<FirebaseAuth>(
-  (ref) => FirebaseAuth.instance,
-);
+final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
+  return FirebaseAuth.instance;
+});
 final firebaseDatabaseProvider = Provider<FirebaseDatabase>(
   (ref) => FirebaseDatabase.instance,
 );
 final firestoreProvider = Provider<FirebaseFirestore>(
   (ref) => FirebaseFirestore.instance,
 );
-final firebaseFunctionsProvider = Provider<FirebaseFunctions>(
-  (ref) => FirebaseFunctions.instance,
+final cloudFunctionsHttpServiceProvider = Provider<CloudFunctionsHttpService>(
+  (ref) => CloudFunctionsHttpService(ref.watch(firebaseAuthProvider)),
 );
 
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
@@ -30,7 +31,7 @@ final databaseServiceProvider = Provider<DatabaseService>((ref) {
 
 final matchmakingServiceProvider = Provider<MatchmakingService>((ref) {
   return MatchmakingService(
-    functions: ref.watch(firebaseFunctionsProvider),
+    functions: ref.watch(cloudFunctionsHttpServiceProvider),
     database: ref.watch(firebaseDatabaseProvider),
   );
 });

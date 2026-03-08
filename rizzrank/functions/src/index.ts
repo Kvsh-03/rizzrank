@@ -1,4 +1,13 @@
 /**
+ * Load .env from functions directory (for emulator/local).
+ * Production uses Firebase secrets via defineString; .env is ignored when absent.
+ */
+import * as path from "path";
+import { config } from "dotenv";
+config({ path: path.resolve(__dirname, "../.env") });
+config({ path: path.resolve(__dirname, "../.env.local") });
+
+/**
  * RizzRank Date Race - Cloud Functions
  *
  * Exports:

@@ -29,7 +29,26 @@ class ChatBubble extends StatelessWidget {
           if (!isUser) ...[
             CircleAvatar(
               radius: 16,
-              backgroundImage: NetworkImage(aiAvatarUrl),
+              backgroundColor: Colors.grey[800],
+              child: (aiAvatarUrl.isEmpty || aiAvatarUrl.contains('placeholder'))
+                  ? const Icon(
+                      LucideIcons.user,
+                      color: Colors.white54,
+                      size: 20,
+                    )
+                  : ClipOval(
+                      child: Image.network(
+                        aiAvatarUrl,
+                        fit: BoxFit.cover,
+                        width: 32,
+                        height: 32,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          LucideIcons.user,
+                          color: Colors.white54,
+                          size: 20,
+                        ),
+                      ),
+                    ),
             ),
             const SizedBox(width: 8),
           ],

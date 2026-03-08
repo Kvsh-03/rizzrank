@@ -7,8 +7,6 @@ import '../../auth/data/auth_service.dart';
 
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../debug_log_io.dart' if (dart.library.html) 'debug_log_stub.dart' as debug_log;
-
 const _kSeedAiModelsThrottleMs = 15000; // 15s - survives hot restart, avoids "was already running"
 const _kSeedAiModelsLastStartKey = 'seed_ai_models_last_start_ms';
 
@@ -29,32 +27,12 @@ class DashboardPage extends ConsumerWidget {
             final prefs = await SharedPreferences.getInstance();
             final lastStart = prefs.getInt(_kSeedAiModelsLastStartKey) ?? 0;
             final now = DateTime.now().millisecondsSinceEpoch;
-            if (now - lastStart < _kSeedAiModelsThrottleMs) {
-              // #region agent log
-              debug_log.debugLog('dashboard_page.dart:35', 'seedAiModels skipped (throttled)',
-                  {'lastStart': lastStart, 'now': now, 'elapsed': now - lastStart}, 'H3');
-              // #endregion
-              return;
-            }
+            if (now - lastStart < _kSeedAiModelsThrottleMs) return;
             await prefs.setInt(_kSeedAiModelsLastStartKey, now);
-            // #region agent log
-            debug_log.debugLog('dashboard_page.dart:42', 'seedAiModels about to call',
-                {'prevNull': prev?.value == null, 'nextHasValue': next.value != null}, 'H3');
-            // #endregion
             await ref
-                .read(firebaseFunctionsProvider)
-                .httpsCallable('seedAiModels')
-                .call();
-            // #region agent log
-            debug_log.debugLog('dashboard_page.dart:50', 'seedAiModels completed',
-                {}, 'H3');
-            // #endregion
-          } catch (e, st) {
-            // #region agent log
-            debug_log.debugLog('dashboard_page.dart:55', 'seedAiModels failed',
-                {'error': e.toString(), 'stack': st.toString().split('\n').take(3).join('; ')}, 'H4');
-            // #endregion
-          }
+                .read(cloudFunctionsHttpServiceProvider)
+                .call('seedAiModels');
+          } catch (_) {}
         });
       }
     });
