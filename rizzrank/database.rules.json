@@ -2,25 +2,23 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "active_states": {
       "$matchId": {
         ".read": "auth != null",
         ".write": false,
-
         "is_typing": {
-          ".write": "auth != null",
-          ".validate": "(newData.isString() && newData.val().length <= 128) || !newData.exists()"
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.isBoolean()"
+          }
         }
       }
     },
-
     "presence": {
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "newData.hasChildren(['is_online', 'last_seen'])",
-
         "is_online": {
           ".validate": "newData.isBoolean()"
         },

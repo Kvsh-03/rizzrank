@@ -67,6 +67,21 @@ The app builds and runs on macOS without code signing. However, **Google Sign-In
 4. Add the Keychain Sharing capability (or add `keychain-access-groups` to `macos/Runner/DebugProfile.entitlements` matching the format in `Release.entitlements`).
 5. Rebuild with `flutter run -d macos`.
 
+### Troubleshooting: firebase-admin v12 Modular Imports
+
+Cloud Functions uses firebase-admin v12, which requires **modular imports** for RTDB:
+
+```typescript
+// ✅ Correct (modular)
+import { ServerValue } from "firebase-admin/database";
+created_at: ServerValue.TIMESTAMP
+
+// ❌ Broken (compat namespace — ServerValue is undefined)
+created_at: admin.database.ServerValue.TIMESTAMP
+```
+
+Firestore compat-style (`admin.firestore.FieldValue`) still works, but RTDB does not — always use `import { ServerValue } from "firebase-admin/database"`.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

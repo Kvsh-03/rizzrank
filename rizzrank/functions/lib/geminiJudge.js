@@ -13,7 +13,7 @@ exports.scoreMessage = scoreMessage;
 exports.computeTurnScore = computeTurnScore;
 const generative_ai_1 = require("@google/generative-ai");
 const characters_1 = require("./characters");
-const SCORING_MODEL = "gemini-2.0-flash-lite";
+const SCORING_MODEL = "gemini-1.5-flash";
 function buildScoringPrompt(characterDescription, characterName, lastAIMessage, userMessage, aiTraits = {}) {
     let traitContext = "";
     if (aiTraits && Object.keys(aiTraits).length > 0) {

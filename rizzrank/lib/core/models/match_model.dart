@@ -14,7 +14,7 @@ class ActiveMatchState {
   final String targetPhrase;
   final int p1Vibe;
   final int p2Vibe;
-  final String? isTyping;
+  final Map<String, bool> isTyping;
   final String? winnerUid;
   final int? expiresAt;
   final int? createdAt;
@@ -27,7 +27,7 @@ class ActiveMatchState {
     this.targetPhrase = '',
     this.p1Vibe = 0,
     this.p2Vibe = 0,
-    this.isTyping,
+    this.isTyping = const {},
     this.winnerUid,
     this.expiresAt,
     this.createdAt,
@@ -54,15 +54,23 @@ class ActiveMatchState {
       status: map['status'] as String? ?? 'active',
       playerIds: playerIds,
       aiCharacterId:
-          map['ai_character_id'] as String? ?? map['aiCharacterId'] as String? ?? 'luna',
+          map['ai_character_id'] as String? ??
+          map['aiCharacterId'] as String? ??
+          'luna',
       targetPhrase:
-          map['target_phrase'] as String? ?? map['targetPhrase'] as String? ?? '',
+          map['target_phrase'] as String? ??
+          map['targetPhrase'] as String? ??
+          '',
       p1Vibe: _parseInt(map['p1_vibe'], 0),
       p2Vibe: _parseInt(map['p2_vibe'], 0),
-      isTyping: map['is_typing'] as String?,
+      isTyping: _parseTypingMap(map['is_typing']),
       winnerUid: map['winner_uid'] as String?,
-      expiresAt: map['expires_at'] != null ? _parseInt(map['expires_at'], 0) : null,
-      createdAt: map['created_at'] != null ? _parseInt(map['created_at'], 0) : null,
+      expiresAt: map['expires_at'] != null
+          ? _parseInt(map['expires_at'], 0)
+          : null,
+      createdAt: map['created_at'] != null
+          ? _parseInt(map['created_at'], 0)
+          : null,
     );
   }
 
@@ -71,6 +79,16 @@ class ActiveMatchState {
     if (value is int) return value;
     if (value is double) return value.toInt();
     return int.tryParse(value.toString()) ?? fallback;
+  }
+
+  static Map<String, bool> _parseTypingMap(dynamic value) {
+    if (value == null) return {};
+    if (value is Map) {
+      return Map<String, bool>.from(
+        value.map((k, v) => MapEntry(k.toString(), v == true)),
+      );
+    }
+    return {};
   }
 
   /// Returns the player index (0 or 1) for the given UID, or -1 if not found.
@@ -87,7 +105,10 @@ class ActiveMatchState {
   /// Returns the opponent's UID for the given player UID.
   String? getOpponentUid(String myUid) {
     if (playerIds.length < 2) return null;
-    return playerIds.firstWhere((u) => u != myUid, orElse: () => playerIds.first);
+    return playerIds.firstWhere(
+      (u) => u != myUid,
+      orElse: () => playerIds.first,
+    );
   }
 
   bool get isCompleted => status == 'completed' || status == 'timed_out';

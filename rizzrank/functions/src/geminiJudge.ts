@@ -10,7 +10,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getCharacter } from "./characters";
 
-const SCORING_MODEL = "gemini-2.0-flash-lite";
+const SCORING_MODEL = "gemini-1.5-flash";
 
 export interface ScoringResult {
   baseGood: number;
