@@ -99,6 +99,16 @@ export async function scoreMessage(
     aiTraits
   );
 
+  if (!apiKey || apiKey === "mock") {
+    console.log("[MOCK] scoreMessage called with empty or mock API key");
+    return {
+      baseGood: 8,
+      baseBad: 0,
+      personaMult: 1.0,
+      reasoning: "[MOCK] This is a mocked score because no API key was provided.",
+    };
+  }
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: SCORING_MODEL });
 

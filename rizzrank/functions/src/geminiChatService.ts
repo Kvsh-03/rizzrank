@@ -79,6 +79,18 @@ export async function getAIResponse(
     systemContent += WIN_INSTRUCTION;
   }
 
+  const lastMessage = history.length > 0
+    ? history[history.length - 1].text
+    : "";
+
+  if (!apiKey || apiKey === "mock") {
+    console.log("[MOCK] getAIResponse called with empty or mock API key");
+    return {
+      text: "[MOCK] Wow, that's interesting! Tell me more.",
+      isDateAsk: currentVibe > WIN_THRESHOLD,
+    };
+  }
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: CHAT_MODEL,
@@ -93,10 +105,6 @@ export async function getAIResponse(
     role: m.role === "user" ? ("user" as const) : ("model" as const),
     parts: [{ text: m.text }],
   }));
-
-  const lastMessage = history.length > 0
-    ? history[history.length - 1].text
-    : "";
 
   const chat = model.startChat({ history: geminiHistory });
   const result = await chat.sendMessage(lastMessage);

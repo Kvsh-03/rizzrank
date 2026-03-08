@@ -33,16 +33,56 @@ const DATE_PHRASES = [
     "we should meet",
     "can i take you",
 ];
+function buildTraitPrompt(traits) {
+    if (!traits || Object.keys(traits).length === 0)
+        return "";
+    const parts = [];
+    if (traits.genders)
+        parts.push(`You are a ${traits.genders}.`);
+    if (traits.ages)
+        parts.push(`You are ${traits.ages} years old.`);
+    if (traits.heights)
+        parts.push(`You are ${traits.heights} tall.`);
+    if (traits.ethnicities)
+        parts.push(`Your ethnicity is ${traits.ethnicities}.`);
+    if (traits.careers)
+        parts.push(`You work as a ${traits.careers}.`);
+    if (traits.hobbies)
+        parts.push(`Your favorite hobby is ${traits.hobbies}.`);
+    if (traits.personality_traits)
+        parts.push(`Your personality is ${traits.personality_traits}.`);
+    if (traits.moods)
+        parts.push(`Your current mood is ${traits.moods}.`);
+    if (traits.communication_styles)
+        parts.push(`Your communication style is ${traits.communication_styles}.`);
+    if (traits.love_languages)
+        parts.push(`Your love language is ${traits.love_languages}.`);
+    if (traits.intelligence)
+        parts.push(`Your IQ range is ${traits.intelligence}.`);
+    if (traits.social_penetration_theory)
+        parts.push(`In conversation you are a ${traits.social_penetration_theory}.`);
+    return "\n\nYour persona traits: " + parts.join(" ");
+}
 /**
  * Calls Gemini 2.0 Flash with conversation history.
  * Injects win instruction if vibe > WIN_THRESHOLD.
  * Returns the AI reply text and whether a date-ask was detected.
  */
-async function getAIResponse(apiKey, characterId, history, currentVibe) {
+async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits = {}) {
     const character = (0, characters_1.getCharacter)(characterId);
-    let systemContent = character.systemInstruction;
+    let systemContent = character.systemInstruction + buildTraitPrompt(aiTraits);
     if (currentVibe > exports.WIN_THRESHOLD) {
         systemContent += WIN_INSTRUCTION;
+    }
+    const lastMessage = history.length > 0
+        ? history[history.length - 1].text
+        : "";
+    if (!apiKey || apiKey === "mock") {
+        console.log("[MOCK] getAIResponse called with empty or mock API key");
+        return {
+            text: "[MOCK] Wow, that's interesting! Tell me more.",
+            isDateAsk: currentVibe > exports.WIN_THRESHOLD,
+        };
     }
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
@@ -57,9 +97,6 @@ async function getAIResponse(apiKey, characterId, history, currentVibe) {
         role: m.role === "user" ? "user" : "model",
         parts: [{ text: m.text }],
     }));
-    const lastMessage = history.length > 0
-        ? history[history.length - 1].text
-        : "";
     const chat = model.startChat({ history: geminiHistory });
     const result = await chat.sendMessage(lastMessage);
     const text = result.response.text().trim() ||

@@ -117,6 +117,7 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     }
     const characterId = matchData.ai_character_id || "luna";
     const playerIds = matchData.player_ids || [];
+    const aiTraits = matchData.ai_traits ?? {};
     const playerIndex = playerIds.indexOf(senderUid);
     if (playerIndex === -1) {
         console.error(`Sender ${senderUid} not in match ${matchId} players`);
@@ -165,9 +166,9 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
         ? (userMsgTimestamp - lastAITimestamp) / 1000
         : 4.0; // Default to sweet spot for the first message
     // ── Get AI response via Gemini ───────────────────────────────────────
-    const aiResult = await (0, geminiChatService_1.getAIResponse)(geminiKey.value(), characterId, history, currentVibe);
+    const aiResult = await (0, geminiChatService_1.getAIResponse)(geminiKey.value(), characterId, history, currentVibe, aiTraits);
     // ── Score the user message via Gemini Judge ──────────────────────────
-    const scoringResult = await (0, geminiJudge_1.scoreMessage)(geminiKey.value(), characterId, lastAIMsg, userText);
+    const scoringResult = await (0, geminiJudge_1.scoreMessage)(geminiKey.value(), characterId, lastAIMsg, userText, aiTraits);
     // ── Apply Turn Score formula ─────────────────────────────────────────
     const timingMult = (0, geminiJudge_1.getTimingMult)(responseTimeSec);
     const turnResult = (0, geminiJudge_1.computeTurnScore)(scoringResult, timingMult);
