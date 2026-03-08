@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-import '../debug_log.dart';
 import '../models/chat_message.dart';
 import '../models/firestore_match_model.dart';
 import '../models/match_model.dart';
@@ -76,15 +75,7 @@ class DatabaseService {
   }
 
   Stream<AppUser?> watchUserProfile(String uid) {
-    // #region agent log
-    debugLog(location: 'database_service.dart:77', message: 'watchUserProfile Firestore path', data: {'path': 'users/$uid'}, hypothesisId: 'H1');
-    // #endregion
-    return _firestore.collection('users').doc(uid).snapshots().handleError((e, st) {
-      // #region agent log
-      debugLog(location: 'database_service.dart:82', message: 'watchUserProfile Firestore ERROR', data: {'error': e.toString(), 'code': e is FirebaseException ? e.code : 'unknown', 'plugin': e is FirebaseException ? e.plugin : 'unknown'}, hypothesisId: 'H14');
-      // #endregion
-      throw e;
-    }).map((doc) {
+    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
       if (!doc.exists || doc.data() == null) return null;
       return AppUser.fromFirestore(doc);
     });
@@ -93,18 +84,8 @@ class DatabaseService {
   /// Returns the active match ID for a user, or null if they have no active match.
   /// Used on app startup for reconnection.
   Future<String?> getActiveMatchId(String uid) async {
-    // #region agent log
-    debugLog(location: 'database_service.dart:87', message: 'getActiveMatchId Firestore path', data: {'path': 'users/$uid'}, hypothesisId: 'H1');
-    // #endregion
-    try {
-      final doc = await _firestore.collection('users').doc(uid).get();
-      return doc.data()?['active_match_id'] as String?;
-    } catch (e) {
-      // #region agent log
-      debugLog(location: 'database_service.dart:95', message: 'getActiveMatchId Firestore ERROR', data: {'error': e.toString(), 'code': e is FirebaseException ? e.code : 'unknown'}, hypothesisId: 'H14');
-      // #endregion
-      rethrow;
-    }
+    final doc = await _firestore.collection('users').doc(uid).get();
+    return doc.data()?['active_match_id'] as String?;
   }
 
   // ---------------------------------------------------------------------------

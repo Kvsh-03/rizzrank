@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'core/debug_log.dart';
 import 'firebase_options.dart';
 import 'core/router.dart';
 import 'core/theme/app_theme.dart';
@@ -22,9 +21,6 @@ void main() async {
     'USE_EMULATORS',
     defaultValue: false,
   );
-  // #region agent log
-  debugLog(location: 'main.dart:26', message: 'Firebase init', data: {'useEmulators': useEmulators, 'projectId': DefaultFirebaseOptions.currentPlatform.projectId}, hypothesisId: 'H5');
-  // #endregion
   if (kDebugMode && useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8081);
@@ -34,6 +30,24 @@ void main() async {
     );
     FirebaseDatabase.instance.useDatabaseEmulator('localhost', 9001);
     FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
+  } else {
+    // When switching from emulator to production, a stale emulator auth token
+    // may be cached locally. Validate it with a lightweight Firestore read;
+    // if it fails with permission-denied, sign out so the user gets a fresh
+    // production login.
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied') {
+          await FirebaseAuth.instance.signOut();
+        }
+      }
+    }
   }
 
   runApp(const ProviderScope(child: RizzRankApp()));
