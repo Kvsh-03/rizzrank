@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
+// import '../../../core/data/ai_characters.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/providers/match_providers.dart';
 import '../../../core/theme/app_theme.dart';
@@ -123,7 +123,25 @@ class _BattlePageState extends ConsumerState<BattlePage> {
           return const Scaffold(body: Center(child: Text('Match not found')));
         }
 
-        final aiChar = getCharacterById(liveMatch.aiCharacterId);
+        final aiModels = ref.watch(aiModelsProvider).valueOrNull ?? [];
+        final aiChar = aiModels.firstWhere(
+          (m) => m['id'] == liveMatch.aiCharacterId,
+          orElse: () => {
+            'name': 'Unknown AI',
+            'role': 'Mystery',
+            'description': 'An enigma.',
+            'avatarUrl': 'https://via.placeholder.com/150',
+          },
+        );
+
+        final aiCharName = aiChar['name'] as String? ?? 'Unknown AI';
+        final aiCharRole = aiChar['role'] as String? ?? 'Mystery';
+        final aiCharDescription =
+            aiChar['description'] as String? ?? 'An enigma.';
+        final aiCharAvatar =
+            aiChar['avatar_url'] as String? ??
+            aiChar['avatarUrl'] as String? ??
+            'https://via.placeholder.com/150';
         final myVibe = liveMatch.vibeFor(user.uid);
         final opponentUid = liveMatch.getOpponentUid(user.uid);
         final opponentVibe = opponentUid != null
@@ -247,7 +265,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                             ),
                             child: ClipOval(
                               child: Image.network(
-                                aiChar.avatarUrl,
+                                aiCharAvatar,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Container(
                                   color: Colors.grey[800],
@@ -281,7 +299,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      aiChar.name,
+                      aiCharName,
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -289,7 +307,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${aiChar.role} \u2022 "${aiChar.description.split('.').first}"',
+                      '$aiCharRole \u2022 "${aiCharDescription.split('.').first}"',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.5),
                         fontSize: 13,
@@ -342,8 +360,8 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                       itemBuilder: (context, index) {
                         return ChatBubble(
                           message: reversedMessages[index],
-                          aiAvatarUrl: aiChar.avatarUrl,
-                          aiName: aiChar.name,
+                          aiAvatarUrl: aiCharAvatar,
+                          aiName: aiCharName,
                         );
                       },
                     );
@@ -365,7 +383,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                     children: [
                       CircleAvatar(
                         radius: 14,
-                        backgroundImage: NetworkImage(aiChar.avatarUrl),
+                        backgroundImage: NetworkImage(aiCharAvatar),
                         onBackgroundImageError: (_, __) {},
                       ),
                       const SizedBox(width: 8),
@@ -391,7 +409,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${aiChar.name} is typing...',
+                              '$aiCharName is typing...',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.5),
                                 fontSize: 13,

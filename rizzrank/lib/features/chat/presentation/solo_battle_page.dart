@@ -1,9 +1,9 @@
 import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_card.dart';
@@ -24,7 +24,7 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
   final _scrollController = ScrollController();
   final _random = Random();
 
-  late final AICharacter _character;
+  Map<String, dynamic>? _aiData;
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
   int _affection = 45;
@@ -46,22 +46,59 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
   @override
   void initState() {
     super.initState();
-    _character = getCharacterById(widget.characterId);
+    _loadAiData();
+
     _addAiMessage(
       "Honestly, the cinematography in that scene felt a bit derivative. "
       "Change my mind? Or are you just going to agree with the critics?",
     );
   }
 
+  Future<void> _loadAiData() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('ai_models')
+          .doc(widget.characterId)
+          .get();
+      if (mounted) {
+        setState(() {
+          if (doc.exists && doc.data() != null) {
+            _aiData = {'id': doc.id, ...doc.data()!};
+          } else {
+            _aiData = {
+              'name': 'Unknown AI',
+              'role': 'Mystery',
+              'description': 'An enigmatic presence.',
+              'avatarUrl': 'https://via.placeholder.com/150',
+            };
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _aiData = {
+            'name': 'Error AI',
+            'role': 'Glitch',
+            'description': 'Could not load AI profile.',
+            'avatarUrl': 'https://via.placeholder.com/150',
+          };
+        });
+      }
+    }
+  }
+
   void _addAiMessage(String text) {
     _msgCounter++;
-    _messages.add(ChatMessage(
-      key: 'msg-$_msgCounter',
-      senderUid: 'ai_${widget.characterId}',
-      role: 'model',
-      content: text,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-    ));
+    _messages.add(
+      ChatMessage(
+        key: 'msg-$_msgCounter',
+        senderUid: 'ai_${widget.characterId}',
+        role: 'model',
+        content: text,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -77,20 +114,22 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _isTyping) return;
+    if (text.isEmpty || _isTyping || _aiData == null) return;
 
     final rizzDelta = _random.nextInt(80) + 20;
 
     setState(() {
       _msgCounter++;
-      _messages.add(ChatMessage(
-        key: 'msg-$_msgCounter',
-        senderUid: 'local_user',
-        role: 'user',
-        content: text,
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        rizzDelta: rizzDelta,
-      ));
+      _messages.add(
+        ChatMessage(
+          key: 'msg-$_msgCounter',
+          senderUid: 'local_user',
+          role: 'user',
+          content: text,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          rizzDelta: rizzDelta,
+        ),
+      );
       _affection = (_affection + (_random.nextInt(8) + 2)).clamp(0, 100);
       _textController.clear();
       _isTyping = true;
@@ -118,6 +157,21 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_aiData == null) {
+      return const Scaffold(
+        backgroundColor: AppTheme.backgroundDark,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+      );
+    }
+
+    final String name = _aiData!['name'] ?? 'Unknown AI';
+    final String role = _aiData!['role'] ?? 'Mystery';
+    final String description = _aiData!['description'] ?? 'An enigma.';
+    final String avatarUrl =
+        _aiData!['avatar_url'] ??
+        _aiData!['avatarUrl'] ??
+        'https://via.placeholder.com/150';
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       appBar: AppBar(
@@ -125,8 +179,10 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
           icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => context.go('/dashboard'),
         ),
-        title: const Text('RizzRank',
-            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+        title: const Text(
+          'RizzRank',
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -134,25 +190,34 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
               onTap: () => context.go('/results/victory/solo'),
               borderRadius: BorderRadius.circular(8),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: Colors.greenAccent.withOpacity(0.2),
-                  border:
-                      Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                  border: Border.all(
+                    color: Colors.greenAccent.withOpacity(0.4),
+                  ),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('FINISH',
-                        style: TextStyle(
-                            color: Colors.greenAccent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
+                    Text(
+                      'FINISH',
+                      style: TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     SizedBox(width: 4),
-                    Icon(LucideIcons.trophy,
-                        color: Colors.greenAccent, size: 16),
+                    Icon(
+                      LucideIcons.trophy,
+                      color: Colors.greenAccent,
+                      size: 16,
+                    ),
                   ],
                 ),
               ),
@@ -170,10 +235,7 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  AppTheme.primary.withOpacity(0.1),
-                  Colors.transparent,
-                ],
+                colors: [AppTheme.primary.withOpacity(0.1), Colors.transparent],
               ),
             ),
             child: Column(
@@ -203,17 +265,21 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: AppTheme.primary.withOpacity(0.5),
-                              width: 2),
+                            color: AppTheme.primary.withOpacity(0.5),
+                            width: 2,
+                          ),
                         ),
                         child: ClipOval(
                           child: Image.network(
-                            _character.avatarUrl,
+                            avatarUrl,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               color: Colors.grey[800],
-                              child: const Icon(LucideIcons.user,
-                                  color: Colors.white54, size: 40),
+                              child: const Icon(
+                                LucideIcons.user,
+                                color: Colors.white54,
+                                size: 40,
+                              ),
                             ),
                           ),
                         ),
@@ -229,31 +295,44 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                           color: Colors.greenAccent,
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: AppTheme.backgroundDark, width: 3),
+                            color: AppTheme.backgroundDark,
+                            width: 3,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(_character.name,
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
-                  '${_character.role} \u2022 "${_character.description.split('.').first}"',
+                  '$role \u2022 "${description.split('.').first}"',
                   style: TextStyle(
-                      color: Colors.white.withOpacity(0.5), fontSize: 13),
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 13,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _PersonalityTag(label: 'Cinephile', color: AppTheme.primary),
+                    _PersonalityTag(
+                      label: 'Cinephile',
+                      color: AppTheme.primary,
+                    ),
                     const SizedBox(width: 8),
                     _PersonalityTag(
-                        label: 'Night Owl', color: Colors.pinkAccent),
+                      label: 'Night Owl',
+                      color: Colors.pinkAccent,
+                    ),
                   ],
                 ),
               ],
@@ -274,15 +353,12 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
               itemCount: _messages.length + (_isTyping ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == _messages.length && _isTyping) {
-                  return _TypingIndicator(
-                    avatarUrl: _character.avatarUrl,
-                    name: _character.name,
-                  );
+                  return _TypingIndicator(avatarUrl: avatarUrl, name: name);
                 }
                 return ChatBubble(
                   message: _messages[index],
-                  aiAvatarUrl: _character.avatarUrl,
-                  aiName: _character.name,
+                  aiAvatarUrl: avatarUrl,
+                  aiName: name,
                 );
               },
             ),
@@ -294,7 +370,8 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
             decoration: BoxDecoration(
               color: AppTheme.backgroundDark.withOpacity(0.95),
               border: Border(
-                  top: BorderSide(color: AppTheme.primary.withOpacity(0.2))),
+                top: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
+              ),
             ),
             child: SafeArea(
               child: Row(
@@ -308,25 +385,34 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                           decoration: InputDecoration(
                             hintText: 'Type your smooth response...',
                             hintStyle: TextStyle(
-                                color: Colors.white.withOpacity(0.3)),
+                              color: Colors.white.withOpacity(0.3),
+                            ),
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.08),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(24),
                               borderSide: BorderSide(
-                                  color: AppTheme.primary.withOpacity(0.3)),
+                                color: AppTheme.primary.withOpacity(0.3),
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(24),
                               borderSide: BorderSide(
-                                  color: AppTheme.primary.withOpacity(0.5),
-                                  width: 2),
+                                color: AppTheme.primary.withOpacity(0.5),
+                                width: 2,
+                              ),
                             ),
-                            contentPadding:
-                                const EdgeInsets.fromLTRB(20, 14, 48, 14),
+                            contentPadding: const EdgeInsets.fromLTRB(
+                              20,
+                              14,
+                              48,
+                              14,
+                            ),
                           ),
                           style: const TextStyle(
-                              color: Colors.white, fontSize: 14),
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
                           onSubmitted: (_) => _sendMessage(),
                         ),
                         Positioned(
@@ -340,8 +426,11 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                                 color: AppTheme.primary,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(LucideIcons.send,
-                                  color: Colors.white, size: 18),
+                              child: const Icon(
+                                LucideIcons.send,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                             ),
                           ),
                         ),
@@ -356,10 +445,14 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                       shape: BoxShape.circle,
                       color: AppTheme.primary.withOpacity(0.1),
                       border: Border.all(
-                          color: AppTheme.primary.withOpacity(0.3)),
+                        color: AppTheme.primary.withOpacity(0.3),
+                      ),
                     ),
-                    child: const Icon(LucideIcons.wand2,
-                        color: AppTheme.primary, size: 20),
+                    child: const Icon(
+                      LucideIcons.wand2,
+                      color: AppTheme.primary,
+                      size: 20,
+                    ),
                   ),
                 ],
               ),
@@ -415,6 +508,7 @@ class _TypingIndicator extends StatelessWidget {
           CircleAvatar(
             radius: 16,
             backgroundImage: NetworkImage(avatarUrl),
+            onBackgroundImageError: (_, __) {},
           ),
           const SizedBox(width: 8),
           GlassCard(
@@ -432,10 +526,8 @@ class _TypingIndicator extends StatelessWidget {
                     tween: Tween(begin: 0.4, end: 1.0),
                     duration: Duration(milliseconds: 600 + i * 200),
                     curve: Curves.easeInOut,
-                    builder: (_, value, child) => Opacity(
-                      opacity: value,
-                      child: child,
-                    ),
+                    builder: (_, value, child) =>
+                        Opacity(opacity: value, child: child),
                     child: Container(
                       width: 6,
                       height: 6,

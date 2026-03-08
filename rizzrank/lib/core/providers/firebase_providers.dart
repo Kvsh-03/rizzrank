@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/database_service.dart';
 import '../services/matchmaking_service.dart';
 import '../models/user_model.dart';
+import '../models/firestore_match_model.dart';
 
 final firebaseAuthProvider = Provider<FirebaseAuth>(
   (ref) => FirebaseAuth.instance,
@@ -48,4 +49,21 @@ final currentUserProvider = StreamProvider<AppUser?>((ref) {
     loading: () => const Stream.empty(), // keeps AsyncLoading
     error: (e, st) => Stream.error(e, st),
   );
+});
+
+final aiModelsProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>(
+  (ref) {
+    return ref.watch(firestoreProvider).collection('ai_models').snapshots().map(
+      (snap) {
+        return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      },
+    );
+  },
+);
+final matchHistoryProvider = StreamProvider.autoDispose<List<FirestoreMatch>>((
+  ref,
+) {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return Stream.value([]);
+  return ref.watch(databaseServiceProvider).watchMatchHistory(user.uid);
 });

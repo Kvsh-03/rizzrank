@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'providers/firebase_providers.dart';
 import 'widgets/app_shell.dart';
-import '../features/auth/presentation/landing_page.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
 import '../features/matchmaking/presentation/matchmaking_page.dart';
@@ -66,7 +65,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const LandingPage()),
+      GoRoute(path: '/', builder: (context, state) => const LoginPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
         path: '/matchmaking',

@@ -107,14 +107,6 @@ class LeaderboardPage extends ConsumerWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Text(
-                      '.pro',
-                      style: TextStyle(
-                        color: AppTheme.primary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
                   ],
                 ),
               ),
