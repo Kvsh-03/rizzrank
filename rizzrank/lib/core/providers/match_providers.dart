@@ -26,8 +26,19 @@ final firestoreMatchStreamProvider =
       });
     });
 
-/// Streams chat messages from the player's private shard in a match.
+/// Streams chat messages. Uses RTDB for active matches (battle page).
+/// For completed matches (history detail), use messagesFromFirestoreProvider.
 final messagesStreamProvider =
+    StreamProvider.family<List<ChatMessage>, ({String matchId, String uid})>((
+      ref,
+      params,
+    ) {
+      final dbService = ref.watch(databaseServiceProvider);
+      return dbService.watchMessagesFromRTDB(params.matchId, params.uid);
+    });
+
+/// Streams chat messages from Firestore (for completed match history).
+final messagesFromFirestoreProvider =
     StreamProvider.family<List<ChatMessage>, ({String matchId, String uid})>((
       ref,
       params,

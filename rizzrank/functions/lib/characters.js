@@ -11,6 +11,7 @@ exports.AI_CHARACTERS = [
     {
         id: "luna",
         name: "Luna",
+        gender: "female",
         role: "Film Student",
         description: "Moody & Articulate. Loves 70s noir and niche cinematography.",
         avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200",
@@ -21,6 +22,7 @@ exports.AI_CHARACTERS = [
     {
         id: "atlas",
         name: "Atlas",
+        gender: "male",
         role: "Mechanical Android",
         description: "Logical but curious about human emotion.",
         avatar: "https://images.unsplash.com/photo-1546776310-eef45dd6d63c?auto=format&fit=crop&q=80&w=200&h=200",
@@ -31,6 +33,7 @@ exports.AI_CHARACTERS = [
     {
         id: "zephyr",
         name: "Zephyr",
+        gender: "male",
         role: "Neon Strategist",
         description: "Fast-paced, high energy, and loves competition.",
         avatar: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=200&h=200",

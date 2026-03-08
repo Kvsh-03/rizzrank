@@ -10,6 +10,7 @@ export interface AICharacter {
   description: string;
   avatar: string;
   difficulty: number;
+  gender: "female" | "male";
   systemInstruction: string;
   openingLine: string;
 }
@@ -18,6 +19,7 @@ export const AI_CHARACTERS: AICharacter[] = [
   {
     id: "luna",
     name: "Luna",
+    gender: "female",
     role: "Film Student",
     description: "Moody & Articulate. Loves 70s noir and niche cinematography.",
     avatar:
@@ -31,6 +33,7 @@ export const AI_CHARACTERS: AICharacter[] = [
   {
     id: "atlas",
     name: "Atlas",
+    gender: "male",
     role: "Mechanical Android",
     description: "Logical but curious about human emotion.",
     avatar:
@@ -44,6 +47,7 @@ export const AI_CHARACTERS: AICharacter[] = [
   {
     id: "zephyr",
     name: "Zephyr",
+    gender: "male",
     role: "Neon Strategist",
     description: "Fast-paced, high energy, and loves competition.",
     avatar:

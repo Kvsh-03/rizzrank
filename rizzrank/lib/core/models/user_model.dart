@@ -6,7 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 ///
 /// Server-managed fields (Cloud Functions only):
 ///   elo_rating, total_games, wins, losses, active_match_id, leaderboard_rank.
-/// Client-managed fields: display_name, rizz_title, preferred_gender, last_played.
+/// Client-managed fields: display_name, rizz_title, gender, preferred_gender, last_played.
 class AppUser {
   final String uid;
   final String displayName;
@@ -18,6 +18,7 @@ class AppUser {
   final DateTime? lastPlayed;
   final int? createdAt;
   final String? activeMatchId;
+  final String? gender;
   final String? preferredGender;
   final int? leaderboardRank;
 
@@ -32,6 +33,7 @@ class AppUser {
     this.lastPlayed,
     this.createdAt,
     this.activeMatchId,
+    this.gender,
     this.preferredGender,
     this.leaderboardRank,
   });
@@ -80,6 +82,7 @@ class AppUser {
           : null,
       activeMatchId:
           map['active_match_id'] as String? ?? map['activeMatchId'] as String?,
+      gender: map['gender'] as String?,
       preferredGender:
           map['preferred_gender'] as String? ?? map['preferredGender'] as String?,
       leaderboardRank: map['leaderboard_rank'] != null
@@ -111,6 +114,7 @@ class AppUser {
           : FieldValue.serverTimestamp(),
       if (createdAt != null) 'created_at': createdAt,
       if (activeMatchId != null) 'active_match_id': activeMatchId,
+      if (gender != null) 'gender': gender,
       if (preferredGender != null) 'preferred_gender': preferredGender,
       if (leaderboardRank != null) 'leaderboard_rank': leaderboardRank,
     };
@@ -123,6 +127,7 @@ class AppUser {
       'display_name': displayName,
       'rizz_title': rizzTitle,
       'last_played': FieldValue.serverTimestamp(),
+      if (gender != null) 'gender': gender,
       if (preferredGender != null) 'preferred_gender': preferredGender,
     };
   }
@@ -140,6 +145,7 @@ class AppUser {
     DateTime? lastPlayed,
     int? createdAt,
     String? activeMatchId,
+    String? gender,
     String? preferredGender,
     int? leaderboardRank,
   }) {
@@ -154,6 +160,7 @@ class AppUser {
       lastPlayed: lastPlayed ?? this.lastPlayed,
       createdAt: createdAt ?? this.createdAt,
       activeMatchId: activeMatchId ?? this.activeMatchId,
+      gender: gender ?? this.gender,
       preferredGender: preferredGender ?? this.preferredGender,
       leaderboardRank: leaderboardRank ?? this.leaderboardRank,
     );

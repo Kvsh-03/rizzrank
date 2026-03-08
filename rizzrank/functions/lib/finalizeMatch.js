@@ -44,6 +44,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.finalizeMatch = finalizeMatch;
 exports.drawMatch = drawMatch;
 const admin = __importStar(require("firebase-admin"));
+const firestore_1 = require("firebase-admin/firestore");
 const K_FACTOR = 32;
 function expectedScore(ratingA, ratingB) {
     return 1.0 / (1.0 + Math.pow(10, (ratingB - ratingA) / 400));
@@ -89,6 +90,28 @@ async function finalizeMatch(params) {
     const duration = await getMatchDuration(matchId);
     console.log(`[finalizeMatch] ${matchId}: winner=${winnerUid} (+${winnerDelta}), ` +
         `loser=${loserUid} (${loserDelta}), duration=${duration}s`);
+    // Copy RTDB messages to Firestore for match history
+    for (const uid of playerIds) {
+        const messagesSnap = await rtdb
+            .ref(`matches/${matchId}/players/${uid}/messages`)
+            .orderByChild("timestamp")
+            .get();
+        if (messagesSnap.exists() && messagesSnap.val()) {
+            const val = messagesSnap.val();
+            const messagesRef = db.collection(`matches/${matchId}/players/${uid}/messages`);
+            for (const [, msg] of Object.entries(val)) {
+                const ts = msg.timestamp;
+                await messagesRef.add({
+                    role: msg.role,
+                    content: msg.content ?? msg.text,
+                    sender_uid: msg.sender_uid,
+                    timestamp: ts != null ? firestore_1.Timestamp.fromMillis(ts) : firestore_1.FieldValue.serverTimestamp(),
+                    rizz_delta: msg.rizz_delta ?? null,
+                    scoring: msg.scoring ?? null,
+                });
+            }
+        }
+    }
     const batch = db.batch();
     batch.update(db.doc(`matches/${matchId}`), {
         status: "completed",
@@ -98,17 +121,17 @@ async function finalizeMatch(params) {
         duration,
     });
     batch.update(db.doc(`users/${winnerUid}`), {
-        elo_rating: admin.firestore.FieldValue.increment(winnerDelta),
-        wins: admin.firestore.FieldValue.increment(1),
-        total_games: admin.firestore.FieldValue.increment(1),
-        last_played: admin.firestore.FieldValue.serverTimestamp(),
+        elo_rating: firestore_1.FieldValue.increment(winnerDelta),
+        wins: firestore_1.FieldValue.increment(1),
+        total_games: firestore_1.FieldValue.increment(1),
+        last_played: firestore_1.FieldValue.serverTimestamp(),
         active_match_id: null,
     });
     batch.update(db.doc(`users/${loserUid}`), {
-        elo_rating: admin.firestore.FieldValue.increment(loserDelta),
-        losses: admin.firestore.FieldValue.increment(1),
-        total_games: admin.firestore.FieldValue.increment(1),
-        last_played: admin.firestore.FieldValue.serverTimestamp(),
+        elo_rating: firestore_1.FieldValue.increment(loserDelta),
+        losses: firestore_1.FieldValue.increment(1),
+        total_games: firestore_1.FieldValue.increment(1),
+        last_played: firestore_1.FieldValue.serverTimestamp(),
         active_match_id: null,
     });
     await batch.commit();
@@ -116,6 +139,9 @@ async function finalizeMatch(params) {
         status: "completed",
         winner_uid: winnerUid,
     });
+    for (const uid of playerIds) {
+        await rtdb.ref(`matchmaking_matches/${uid}`).remove();
+    }
 }
 /**
  * Handles a draw (timeout with equal vibes). No ELO changes, but match is
@@ -135,8 +161,8 @@ async function drawMatch(matchId, playerIds) {
     });
     for (const uid of playerIds) {
         batch.update(db.doc(`users/${uid}`), {
-            total_games: admin.firestore.FieldValue.increment(1),
-            last_played: admin.firestore.FieldValue.serverTimestamp(),
+            total_games: firestore_1.FieldValue.increment(1),
+            last_played: firestore_1.FieldValue.serverTimestamp(),
             active_match_id: null,
         });
     }
@@ -145,5 +171,8 @@ async function drawMatch(matchId, playerIds) {
         status: "timed_out",
         winner_uid: null,
     });
+    for (const uid of playerIds) {
+        await rtdb.ref(`matchmaking_matches/${uid}`).remove();
+    }
 }
 //# sourceMappingURL=finalizeMatch.js.map

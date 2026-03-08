@@ -2,6 +2,46 @@
   "rules": {
     ".read": false,
     ".write": false,
+    "matchmaking_queue": {
+      "$preference": {
+        ".indexOn": ["timestamp"],
+        "$uid": {
+          ".read": false,
+          ".write": false
+        }
+      }
+    },
+    "matchmaking_queue_index": {
+      "$uid": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "matchmaking_lock": {
+      ".read": false,
+      ".write": false
+    },
+    "matchmaking_matches": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "matches": {
+      "$matchId": {
+        "players": {
+          "$playerId": {
+            "messages": {
+              ".indexOn": ["timestamp"],
+              ".read": "auth != null && auth.uid === $playerId",
+              "$msgId": {
+                ".write": "auth != null && auth.uid === $playerId"
+              }
+            }
+          }
+        }
+      }
+    },
     "active_states": {
       "$matchId": {
         ".read": "auth != null",

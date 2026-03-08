@@ -1,10 +1,7 @@
 "use strict";
 /**
- * One-time seed script for ai_models Firestore collection.
- * Run via: npx ts-node src/seedAiModels.ts
- * Or deploy as a callable and invoke once.
- *
- * Populates ai_models/{model_slug} with name, personality_summary, system_prompt.
+ * RTDB onValueUpdated trigger: when presence/{uid} is updated and is_online becomes false,
+ * finalize any active match so the opponent wins (disconnect = forfeit).
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -40,29 +37,33 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.onPresenceOffline = void 0;
 const admin = __importStar(require("firebase-admin"));
-const characters_1 = require("./characters");
-if (!admin.apps.length) {
-    const projectId = process.env.GCLOUD_PROJECT ?? process.env.GCP_PROJECT ?? "rizzrank-f52cd";
-    admin.initializeApp({ projectId });
-}
+const database_1 = require("firebase-functions/v2/database");
+const finalizeMatch_1 = require("./finalizeMatch");
 const db = admin.firestore();
-async function seed() {
-    const batch = db.batch();
-    for (const char of characters_1.AI_CHARACTERS) {
-        const ref = db.collection("ai_models").doc(char.id);
-        batch.set(ref, {
-            name: char.name,
-            personality_summary: char.description,
-            system_prompt: char.systemInstruction,
-            role: char.role,
-            avatar_url: char.avatar,
-            difficulty: char.difficulty,
-            gender: char.gender,
-        });
-    }
-    await batch.commit();
-    console.log(`Seeded ${characters_1.AI_CHARACTERS.length} AI models to Firestore.`);
-}
-seed().catch(console.error);
-//# sourceMappingURL=seedAiModels.js.map
+exports.onPresenceOffline = (0, database_1.onValueUpdated)("presence/{uid}", async (event) => {
+    const after = event.data.after.val();
+    if (after?.is_online !== false)
+        return;
+    const uid = event.params.uid;
+    const userDoc = await db.doc(`users/${uid}`).get();
+    if (!userDoc.exists)
+        return;
+    const activeMatchId = userDoc.data()?.active_match_id || "";
+    if (!activeMatchId)
+        return;
+    const matchDoc = await db.doc(`matches/${activeMatchId}`).get();
+    if (!matchDoc.exists)
+        return;
+    const matchData = matchDoc.data();
+    if (matchData.status !== "active")
+        return;
+    const playerIds = matchData.player_ids || [];
+    const opponentUid = playerIds.find((id) => id !== uid);
+    if (!opponentUid)
+        return;
+    console.log(`[onPresenceOffline] ${uid} went offline in match ${activeMatchId}, opponent ${opponentUid} wins`);
+    await (0, finalizeMatch_1.finalizeMatch)({ matchId: activeMatchId, winnerUid: opponentUid, playerIds });
+});
+//# sourceMappingURL=onPresenceOffline.js.map

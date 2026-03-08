@@ -1,46 +1,25 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-
-import '../models/firestore_match_model.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 /// Server-side matchmaking service.
 ///
-/// All queue operations run on Cloud Functions (Admin SDK) to prevent
-/// double-matching and ensure clients cannot forge match documents.
+/// Uses RTDB queue: joinQueue adds to queue, leaveQueue removes.
+/// Matcher runs on queue write (Cloud Function). Client watches
+/// matchmaking_matches/{uid} for matchId.
 class MatchmakingService {
   MatchmakingService({
-    FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _functions = functions ?? FirebaseFunctions.instance;
+    FirebaseDatabase? database,
+  })  : _functions = functions ?? FirebaseFunctions.instance,
+        _database = database ?? FirebaseDatabase.instance;
 
-  final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
+  final FirebaseDatabase _database;
 
-  /// Calls the server-side findMatch callable.
-  /// Returns a [FirestoreMatch] if immediately matched, or null if queued.
-  /// If [lat] and [lng] are provided, the server will prefer nearby opponents.
-  Future<FirestoreMatch?> findMatch({double? lat, double? lng}) async {
-    final callable = _functions.httpsCallable('findMatch');
-    final requestData = <String, dynamic>{};
-    if (lat != null && lng != null) {
-      requestData['lat'] = lat;
-      requestData['lng'] = lng;
-    }
-    final result = await callable.call<Map<String, dynamic>>(requestData);
-
-    final data = result.data;
-    if (data['matched'] == true && data['matchId'] != null) {
-      final matchId = data['matchId'] as String;
-      // Fetch the full match doc created by the server
-      final doc = await _firestore.collection('matches').doc(matchId).get();
-      if (doc.exists && doc.data() != null) {
-        return FirestoreMatch.fromFirestore(doc);
-      }
-      // Fallback: return a minimal match with just the ID
-      return FirestoreMatch(matchId: matchId, playerIds: [], status: 'active');
-    }
-    return null;
+  /// Joins the matchmaking queue. Rejects if user already has active_match_id.
+  Future<void> joinQueue() async {
+    final callable = _functions.httpsCallable('joinQueue');
+    await callable.call<Map<String, dynamic>>();
   }
 
   /// Cancels matchmaking by calling the leaveQueue callable.
@@ -49,19 +28,23 @@ class MatchmakingService {
     await callable.call();
   }
 
-  /// Listens for a match to be created for this user (when opponent pairs with them).
-  /// Used when findMatch returns null (queued) to detect pairing by another player's call.
-  Stream<FirestoreMatch?> watchForMatch(String uid) {
-    return _firestore
-        .collection('matches')
-        .where('player_ids', arrayContains: uid)
-        .where('status', isEqualTo: 'active')
-        .orderBy('created_at', descending: true)
-        .limit(1)
-        .snapshots()
-        .map((snap) {
-          if (snap.docs.isEmpty) return null;
-          return FirestoreMatch.fromFirestore(snap.docs.first);
-        });
+  /// Forfeits the current match. Caller loses; opponent wins.
+  Future<void> forfeitMatch(String matchId) async {
+    final callable = _functions.httpsCallable('forfeitMatch');
+    await callable.call<Map<String, dynamic>>({'matchId': matchId});
+  }
+
+  /// Listens for a match to be created for this user.
+  /// When matcher pairs this user, matchmaking_matches/{uid} is set to { matchId }.
+  Stream<String?> watchMatchResult(String uid) {
+    return _database.ref('matchmaking_matches/$uid').onValue.map((event) {
+      final snapshot = event.snapshot;
+      if (!snapshot.exists) return null;
+      final val = snapshot.value;
+      if (val is Map && val['matchId'] != null) {
+        return val['matchId'] as String;
+      }
+      return null;
+    });
   }
 }
