@@ -10,7 +10,8 @@ import * as admin from "firebase-admin";
 import { AI_CHARACTERS } from "./characters";
 
 if (!admin.apps.length) {
-  admin.initializeApp();
+  const projectId = process.env.GCLOUD_PROJECT ?? process.env.GCP_PROJECT ?? "rizzrank-f52cd";
+  admin.initializeApp({ projectId });
 }
 
 const db = admin.firestore();

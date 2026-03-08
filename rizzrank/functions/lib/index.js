@@ -52,10 +52,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkMatchTimeouts = exports.cleanupExpiredMatchmaking = exports.onUserMessageSent = exports.leaveQueue = exports.findMatch = void 0;
+exports.checkMatchTimeouts = exports.cleanupExpiredMatchmaking = exports.onUserMessageSent = exports.seedAiModels = exports.leaveQueue = exports.findMatch = void 0;
 const admin = __importStar(require("firebase-admin"));
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
+const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const geminiChatService_1 = require("./geminiChatService");
 const geminiJudge_1 = require("./geminiJudge");
@@ -81,6 +82,29 @@ function resolveApiKey() {
 var matchmaking_1 = require("./matchmaking");
 Object.defineProperty(exports, "findMatch", { enumerable: true, get: function () { return matchmaking_1.findMatch; } });
 Object.defineProperty(exports, "leaveQueue", { enumerable: true, get: function () { return matchmaking_1.leaveQueue; } });
+// ─────────────────────────────────────────────────────────────────────────────
+// One-time seed: seedAiModels callable. Invoke once to populate ai_models.
+// Run from Flutter: FirebaseFunctions.instance.httpsCallable('seedAiModels').call()
+// ─────────────────────────────────────────────────────────────────────────────
+exports.seedAiModels = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Must be signed in to seed.");
+    }
+    const batch = db.batch();
+    for (const char of characters_1.AI_CHARACTERS) {
+        const ref = db.collection("ai_models").doc(char.id);
+        batch.set(ref, {
+            name: char.name,
+            personality_summary: char.description,
+            system_prompt: char.systemInstruction,
+            role: char.role,
+            avatar_url: char.avatar,
+            difficulty: char.difficulty,
+        });
+    }
+    await batch.commit();
+    return { success: true, count: characters_1.AI_CHARACTERS.length };
+});
 async function loadCharacter(characterId) {
     const doc = await db.doc(`ai_models/${characterId}`).get();
     if (doc.exists) {

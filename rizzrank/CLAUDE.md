@@ -50,6 +50,7 @@ cd functions && npm run serve    # run emulators locally
 TypeScript, Firebase Functions v2. Key exports from `index.ts`:
 - `onUserMessageSent` — Firestore trigger on new chat messages. Pipeline: load AI character → Gemini generates reply → Gemini judges user message (Turn Score) → update RTDB vibe → check win condition
 - `findMatch` / `leaveQueue` — HTTPS callables for matchmaking (ELO ±150 range, optional geohash proximity)
+- `seedAiModels` — One-time callable to populate `ai_models` collection (invoked automatically on first dashboard load)
 - `cleanupExpiredMatchmaking` / `checkMatchTimeouts` — scheduled functions
 
 Scoring formula: `Turn Score = [(Base Good × Persona Mult) × Timing Mult] − Base Bad`
@@ -62,15 +63,13 @@ AI model: `gemini-3.1-flash-lite-preview` for both chat and scoring. API key in 
 # Deploy all Cloud Functions
 firebase deploy --only functions
 
-# Deploy security rules
-firebase deploy --only firestore:rules,database
-
-# Deploy indexes
-firebase deploy --only firestore:indexes
-
-# Seed AI models (requires GOOGLE_APPLICATION_CREDENTIALS)
-cd functions && npx ts-node src/seedAiModels.ts
+# Deploy security rules, indexes, and RTDB rules
+firebase deploy --only firestore:rules,firestore:indexes,database
 ```
+
+**Production setup (one-time):**
+1. **Anonymous Auth**: Enable in [Firebase Console](https://console.firebase.google.com) → Authentication → Sign-in method → Anonymous → Enable.
+2. **AI models**: Seeded automatically when a user first loads the dashboard (via `seedAiModels` callable). Alternatively, run `cd functions && GCLOUD_PROJECT=rizzrank-f52cd npx ts-node src/seedAiModels.ts` (requires `gcloud auth application-default login`).
 
 Firebase project: `rizzrank-f52cd`, Node.js 22 runtime.
 

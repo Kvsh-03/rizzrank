@@ -26,6 +26,10 @@ migrate_working_dir/
 #serviceKey for firebase
 /Users/kushjain/codingprojects/rizzrank/rizzrank/functions/serviceAccountKey.json
 
+# Firebase Functions env (API keys)
+functions/.env
+functions/.env.*
+
 
 # Flutter/Dart/Pub related
 **/doc/api/
