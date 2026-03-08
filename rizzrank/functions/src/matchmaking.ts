@@ -12,6 +12,7 @@
 
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { pickRandomTraits } from "./traitData";
 
 const ELO_RANGE = 150;
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -91,7 +92,7 @@ export const findMatch = onCall(async (request) => {
       status: "active",
       target_phrase: "",
       ai_character_id: aiCharacterId,
-      ai_traits: [],
+      ai_traits: pickRandomTraits(),
       elo_change: {},
       player_elo_before: { [uid]: myElo, [opponentUid]: opponentElo },
       is_game_over: false,

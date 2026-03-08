@@ -23,6 +23,10 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
+#serviceKey for firebase
+/Users/kushjain/codingprojects/rizzrank/rizzrank/functions/serviceAccountKey.json
+
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id

@@ -12,7 +12,7 @@ class FirestoreMatch {
   final String status;
   final String targetPhrase;
   final String? aiCharacterId;
-  final List<String> aiTraits;
+  final Map<String, String> aiTraits;
   final Map<String, int> eloChange;
   final Map<String, int> playerEloBefore;
   final bool isGameOver;
@@ -27,7 +27,7 @@ class FirestoreMatch {
     this.status = 'active',
     this.targetPhrase = '',
     this.aiCharacterId,
-    this.aiTraits = const [],
+    this.aiTraits = const {},
     this.eloChange = const {},
     this.playerEloBefore = const {},
     this.isGameOver = false,
@@ -53,9 +53,12 @@ class FirestoreMatch {
         : <String>[];
 
     final aiTraitsRaw = map['ai_traits'] ?? map['aiTraits'];
-    final aiTraits = aiTraitsRaw is List
-        ? aiTraitsRaw.map((e) => e.toString()).toList()
-        : <String>[];
+    final aiTraits = <String, String>{};
+    if (aiTraitsRaw is Map) {
+      for (final entry in aiTraitsRaw.entries) {
+        aiTraits[entry.key.toString()] = entry.value.toString();
+      }
+    }
 
     final eloChangeRaw = map['elo_change'] ?? map['eloChange'];
     final eloChange = <String, int>{};
@@ -132,7 +135,7 @@ class FirestoreMatch {
     String? status,
     String? targetPhrase,
     String? aiCharacterId,
-    List<String>? aiTraits,
+    Map<String, String>? aiTraits,
     Map<String, int>? eloChange,
     Map<String, int>? playerEloBefore,
     bool? isGameOver,
