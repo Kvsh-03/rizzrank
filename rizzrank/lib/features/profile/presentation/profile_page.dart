@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -86,22 +85,6 @@ class ProfilePage extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          Positioned(
-                            bottom: 4,
-                            right: 4,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppTheme.backgroundDark, width: 2),
-                              ),
-                              child: const Text(
-                                'LVL 42',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -148,90 +131,6 @@ class ProfilePage extends ConsumerWidget {
                       Expanded(child: _StatBox(label: 'Win Rate', value: '$winRate%')),
                       const SizedBox(width: 8),
                       Expanded(child: _StatBox(label: 'Peak', value: '${user.eloRating}')),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Favorite Agent
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: Text(
-                          'FAVORITE AGENT',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
-                            color: Colors.white.withOpacity(0.4),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.primary.withOpacity(0.1)),
-                        ),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                kAICharacters.first.avatarUrl,
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 64,
-                                  height: 64,
-                                  color: AppTheme.primary.withOpacity(0.2),
-                                  child: const Icon(LucideIcons.user, color: AppTheme.primary),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${kAICharacters.first.name}-7',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                                  ),
-                                  const Text(
-                                    'Seduction & Wit Specialist',
-                                    style: TextStyle(fontSize: 12, color: Colors.white54),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: 0.85,
-                                      minHeight: 6,
-                                      backgroundColor: Colors.grey[800],
-                                      valueColor: const AlwaysStoppedAnimation(AppTheme.primary),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  const Text(
-                                    'Affinity Level 85%',
-                                    style: TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(LucideIcons.sparkles, color: AppTheme.primary, size: 20),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),

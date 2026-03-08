@@ -60,7 +60,6 @@ class LeaderboardPage extends ConsumerWidget {
                       'RizzRank',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     ),
-                    Text('.pro', style: TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),

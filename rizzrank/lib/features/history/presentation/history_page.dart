@@ -41,22 +41,12 @@ class HistoryPage extends ConsumerWidget {
           child: Column(
             children: [
               const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Match History',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(LucideIcons.history, color: AppTheme.primary, size: 20),
-                  ),
-                ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Match History',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 24),
               Expanded(

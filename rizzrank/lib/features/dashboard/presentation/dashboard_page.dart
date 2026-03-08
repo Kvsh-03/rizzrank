@@ -49,16 +49,6 @@ class DashboardPage extends ConsumerWidget {
                       const SizedBox(width: 12),
                       const Text('RizzRank',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const Spacer(),
-                      _HeaderIconButton(
-                        icon: LucideIcons.bell,
-                        onTap: () {},
-                      ),
-                      const SizedBox(width: 8),
-                      _HeaderIconButton(
-                        icon: LucideIcons.settings,
-                        onTap: () => context.push('/preferences'),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 32),
@@ -303,27 +293,6 @@ class DashboardPage extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Error loading profile: $error')),
-      ),
-    );
-  }
-}
-
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppTheme.primary.withOpacity(0.2),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: AppTheme.primary, size: 20),
       ),
     );
   }
