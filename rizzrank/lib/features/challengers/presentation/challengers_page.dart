@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
 import '../../../core/providers/app_state_providers.dart';
+import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
 class ChallengersPage extends ConsumerWidget {
@@ -24,34 +24,79 @@ class ChallengersPage extends ConsumerWidget {
               const SizedBox(height: 24),
               Text(
                 'AI Challengers',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Choose an opponent to test your rizz',
-                style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.4),
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: ListView.separated(
-                  itemCount: kAICharacters.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final char = kAICharacters[index];
-                    final isSelected = selectedId == char.id;
-                    return _ChallengerCard(
-                      character: char,
-                      isSelected: isSelected,
-                      onTap: () {
-                        ref.read(selectedChallengerIdProvider.notifier).state = char.id;
-                        context.go('/matchmaking');
+                child: ref
+                    .watch(aiModelsProvider)
+                    .when(
+                      data: (models) {
+                        if (models.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              'No challengers available.',
+                              style: TextStyle(color: Colors.white54),
+                            ),
+                          );
+                        }
+                        return ListView.separated(
+                          itemCount: models.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final char = models[index];
+                            final id = char['id'] as String;
+                            final name =
+                                char['name'] as String? ?? 'AI Opponent';
+                            final role =
+                                char['role'] as String? ?? 'Challenger';
+                            final description =
+                                char['description'] as String? ?? '';
+                            final avatarUrl =
+                                char['avatar_url'] as String? ??
+                                char['avatarUrl'] as String? ??
+                                '';
+
+                            final isSelected = selectedId == id;
+
+                            return _ChallengerCard(
+                              name: name,
+                              role: role,
+                              description: description,
+                              avatarUrl: avatarUrl,
+                              isSelected: isSelected,
+                              onTap: () {
+                                ref
+                                        .read(
+                                          selectedChallengerIdProvider.notifier,
+                                        )
+                                        .state =
+                                    id;
+                                context.go('/matchmaking');
+                              },
+                            );
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                      error: (e, st) => Center(child: Text('Error: $e')),
+                    ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -59,7 +104,10 @@ class ChallengersPage extends ConsumerWidget {
                   child: Text(
                     'Tap a challenger to start a match, or select one on the Home tab and use Find Match.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12),
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.3),
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ),
@@ -73,12 +121,18 @@ class ChallengersPage extends ConsumerWidget {
 
 class _ChallengerCard extends StatelessWidget {
   const _ChallengerCard({
-    required this.character,
+    required this.name,
+    required this.role,
+    required this.description,
+    required this.avatarUrl,
     required this.isSelected,
     required this.onTap,
   });
 
-  final AICharacter character;
+  final String name;
+  final String role;
+  final String description;
+  final String avatarUrl;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -90,7 +144,9 @@ class _ChallengerCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppTheme.primary : Colors.white.withOpacity(0.1),
+            color: isSelected
+                ? AppTheme.primary
+                : Colors.white.withOpacity(0.1),
             width: 2,
           ),
           color: isSelected
@@ -106,9 +162,14 @@ class _ChallengerCard extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 2,
+                  ),
                   image: DecorationImage(
-                    image: NetworkImage(character.avatarUrl),
+                    image: avatarUrl.isNotEmpty
+                        ? NetworkImage(avatarUrl)
+                        : const NetworkImage('https://via.placeholder.com/150'),
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -119,7 +180,7 @@ class _ChallengerCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      character.name,
+                      name,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -128,7 +189,7 @@ class _ChallengerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      character.role,
+                      role,
                       style: TextStyle(
                         color: AppTheme.primary.withOpacity(0.9),
                         fontSize: 14,
@@ -137,7 +198,7 @@ class _ChallengerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      character.description,
+                      description,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.4),
                         fontSize: 12,
@@ -156,7 +217,11 @@ class _ChallengerCard extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: AppTheme.primary.withOpacity(0.2),
                 ),
-                child: const Icon(LucideIcons.chevronRight, color: AppTheme.primary, size: 20),
+                child: const Icon(
+                  LucideIcons.chevronRight,
+                  color: AppTheme.primary,
+                  size: 20,
+                ),
               ),
             ],
           ),

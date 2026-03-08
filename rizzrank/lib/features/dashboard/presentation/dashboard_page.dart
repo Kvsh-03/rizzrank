@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../auth/data/auth_service.dart';
 
-import '../../../core/data/ai_characters.dart';
-import '../../../core/providers/app_state_providers.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -15,7 +13,6 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
-    final selectedId = ref.watch(selectedChallengerIdProvider);
 
     return Scaffold(
       body: userAsync.when(
@@ -65,12 +62,6 @@ class DashboardPage extends ConsumerWidget {
                         ),
                       ),
                       const Spacer(),
-                      _HeaderIconButton(icon: LucideIcons.bell, onTap: () {}),
-                      const SizedBox(width: 8),
-                      _HeaderIconButton(
-                        icon: LucideIcons.settings,
-                        onTap: () => context.push('/preferences'),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 32),
@@ -194,84 +185,6 @@ class DashboardPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Pick your opponent
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Pick your opponent',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white.withOpacity(0.8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Select an AI challenger, then tap Find Match',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 100,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: kAICharacters.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 16),
-                      itemBuilder: (context, index) {
-                        final char = kAICharacters[index];
-                        final isSelected = selectedId == char.id;
-                        return GestureDetector(
-                          onTap: () {
-                            ref
-                                    .read(selectedChallengerIdProvider.notifier)
-                                    .state =
-                                char.id;
-                          },
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 64,
-                                height: 64,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? AppTheme.primary
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                  image: DecorationImage(
-                                    image: NetworkImage(char.avatarUrl),
-                                    fit: BoxFit.cover,
-                                    onError: (_, __) {},
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                char.name,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isSelected
-                                      ? AppTheme.primary
-                                      : Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
                   // Find Match Button
                   _FindMatchButton(),
                   const SizedBox(height: 24),
@@ -376,27 +289,6 @@ class DashboardPage extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppTheme.primary.withOpacity(0.2),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: AppTheme.primary, size: 20),
       ),
     );
   }
