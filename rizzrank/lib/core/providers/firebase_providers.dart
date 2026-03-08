@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../debug_log.dart';
 import '../services/database_service.dart';
 import '../services/matchmaking_service.dart';
 import '../models/user_model.dart';
@@ -45,9 +44,6 @@ final currentUserProvider = StreamProvider<AppUser?>((ref) {
   return authAsync.when(
     data: (authUser) {
       if (authUser == null) return Stream.value(null);
-      // #region agent log
-      debugLog(location: 'firebase_providers.dart:48', message: 'currentUserProvider: about to watchUserProfile', data: {'uid': authUser.uid, 'isAnonymous': authUser.isAnonymous, 'providerId': authUser.providerData.isEmpty ? 'anonymous' : authUser.providerData.first.providerId}, hypothesisId: 'H2');
-      // #endregion
       return ref.watch(databaseServiceProvider).watchUserProfile(authUser.uid);
     },
     loading: () => const Stream.empty(), // keeps AsyncLoading
@@ -84,9 +80,6 @@ final traitsProvider = StreamProvider.autoDispose<Map<String, List<String>>>((re
 final activeMatchCheckProvider = FutureProvider<String?>((ref) async {
   final authUser = ref.watch(authStateProvider).value;
   if (authUser == null) return null;
-  // #region agent log
-  debugLog(location: 'firebase_providers.dart:68', message: 'activeMatchCheckProvider: about to getActiveMatchId', data: {'uid': authUser.uid, 'isAnonymous': authUser.isAnonymous}, hypothesisId: 'H2');
-  // #endregion
   final dbService = ref.watch(databaseServiceProvider);
   return dbService.getActiveMatchId(authUser.uid);
 });

@@ -20,10 +20,9 @@ service cloud.firestore {
     //   - Server-managed fields (elo_rating, total_games, wins, losses)
     //     are protected from client writes.
     //   - No client deletes.
-    //   - DEBUG: allow read: if true to test if auth is the blocker
     // ─────────────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read: if true;  // DEBUG: was isSignedIn() - revert after diagnostic
+      allow read: if isSignedIn();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys()
@@ -37,7 +36,7 @@ service cloud.firestore {
     //   - All writes are server-only (Admin SDK seeding).
     // ─────────────────────────────────────────────────────────────────────────
     match /ai_models/{modelId} {
-      allow read: if true;  // Relaxed for emulator; use isSignedIn() in production
+      allow read: if isSignedIn();
       allow write: if false;
     }
 
@@ -47,7 +46,7 @@ service cloud.firestore {
     //   - All writes are server-only (Admin SDK seeding).
     // ─────────────────────────────────────────────────────────────────────────
     match /traits/{category} {
-      allow read: if true;  // Relaxed for emulator; use isSignedIn() in production
+      allow read: if isSignedIn();
       allow write: if false;
     }
 
