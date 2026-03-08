@@ -3,12 +3,14 @@
  * Server-side matchmaking via HTTPS callable.
  *
  * Flow:
- *   1. Authenticated user calls findMatch.
+ *   1. Authenticated user calls findMatch with optional lat/lng.
  *   2. Function queries matchmaking queue for opponents within +/-150 ELO.
- *   3. If opponent found: Firestore transaction deletes both, creates match doc,
+ *   3. If location provided, prefers opponents that share a 4-char geohash
+ *      prefix (~20 km radius). Among nearby candidates one is picked randomly.
+ *   4. If opponent found: Firestore transaction deletes both, creates match doc,
  *      creates RTDB active_states/{matchId} initial state.
- *   4. If no opponent: adds caller to queue with expire_at TTL.
- *   5. Returns { matched: boolean, matchId?: string }.
+ *   5. If no opponent: adds caller to queue with expire_at TTL.
+ *   6. Returns { matched: boolean, matchId?: string }.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -51,12 +53,19 @@ const traitData_1 = require("./traitData");
 const characters_1 = require("./characters");
 const firestore_1 = require("firebase-admin/firestore");
 const database_1 = require("firebase-admin/database");
+const ngeohash = __importStar(require("ngeohash"));
 const ELO_RANGE = 150;
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MATCH_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+const GEOHASH_PRECISION = 12; // full precision stored in queue
+const GEOHASH_PREFIX_LEN = 4; // ~20 km proximity radius
 const AI_CHARACTERS = ["luna", "atlas", "zephyr"];
 function pickRandomCharacter() {
     return AI_CHARACTERS[Math.floor(Math.random() * AI_CHARACTERS.length)];
+}
+/** Pick a random element from an array. */
+function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
 }
 exports.findMatch = (0, https_1.onCall)(async (request) => {
     const db = admin.firestore();
@@ -65,6 +74,14 @@ exports.findMatch = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError("unauthenticated", "Must be signed in to find a match.");
     }
     const uid = request.auth.uid;
+    // Extract optional location from request data
+    const reqData = request.data ?? {};
+    const lat = typeof reqData.lat === "number" ? reqData.lat : null;
+    const lng = typeof reqData.lng === "number" ? reqData.lng : null;
+    const myGeohash = lat !== null && lng !== null
+        ? ngeohash.encode(lat, lng, GEOHASH_PRECISION)
+        : null;
+    const myGeoPrefix = myGeohash ? myGeohash.substring(0, GEOHASH_PREFIX_LEN) : null;
     const userDoc = await db.doc(`users/${uid}`).get();
     if (!userDoc.exists) {
         throw new https_1.HttpsError("not-found", "User profile not found. Create a profile first.");
@@ -77,29 +94,47 @@ exports.findMatch = (0, https_1.onCall)(async (request) => {
     const result = await db.runTransaction(async (transaction) => {
         // Query queue ordered by timestamp (FIFO), limited batch for perf
         const queueSnap = await transaction.get(db.collection("matchmaking").orderBy("timestamp", "asc").limit(50));
-        // Find first compatible opponent (not self, within ELO range)
-        let opponentDoc = null;
+        // Separate candidates into nearby vs any (ELO-compatible, not self)
+        const nearbyCandidates = [];
+        const allCandidates = [];
         for (const doc of queueSnap.docs) {
             if (doc.id === uid)
                 continue;
             const data = doc.data();
             const opponentElo = data.elo_rating ?? 1000;
-            if (opponentElo >= minElo && opponentElo <= maxElo) {
-                opponentDoc = doc;
-                break;
+            if (opponentElo < minElo || opponentElo > maxElo)
+                continue;
+            allCandidates.push(doc);
+            // Check proximity if both players have location
+            if (myGeoPrefix && data.geohash) {
+                const opponentPrefix = data.geohash.substring(0, GEOHASH_PREFIX_LEN);
+                if (opponentPrefix === myGeoPrefix) {
+                    nearbyCandidates.push(doc);
+                }
             }
         }
+        // Prefer nearby, fallback to any ELO-compatible, pick randomly
+        let opponentDoc = null;
+        if (nearbyCandidates.length > 0) {
+            opponentDoc = pickRandom(nearbyCandidates);
+        }
+        else if (allCandidates.length > 0) {
+            opponentDoc = pickRandom(allCandidates);
+        }
         if (!opponentDoc) {
-            // FIX 1: Restore the Queue Logic instead of instant solo matching.
-            // Put the user into the matchmaking queue so the next person can find them.
+            // No opponent available — add caller to the matchmaking queue.
             const expireAt = Date.now() + QUEUE_TTL_MS;
-            transaction.set(db.collection("matchmaking").doc(uid), {
+            const queueEntry = {
                 uid: uid,
                 display_name: myDisplayName,
                 elo_rating: myElo,
                 timestamp: firestore_1.FieldValue.serverTimestamp(),
                 expire_at: expireAt,
-            });
+            };
+            if (myGeohash) {
+                queueEntry.geohash = myGeohash;
+            }
+            transaction.set(db.collection("matchmaking").doc(uid), queueEntry);
             return { matched: false };
         }
         const opponentUid = opponentDoc.id;

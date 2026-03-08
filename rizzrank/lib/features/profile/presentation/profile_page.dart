@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/data/ai_characters.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/data/auth_service.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -30,7 +31,10 @@ class ProfilePage extends ConsumerWidget {
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -40,7 +44,8 @@ class ProfilePage extends ConsumerWidget {
                         ),
                         Text(
                           'Player Profile',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         IconButton(
                           onPressed: () => context.push('/preferences'),
@@ -82,7 +87,11 @@ class ProfilePage extends ConsumerWidget {
                               child: CircleAvatar(
                                 radius: 56,
                                 backgroundColor: Colors.grey[800],
-                                child: Icon(LucideIcons.user, size: 48, color: Colors.white.withOpacity(0.6)),
+                                child: Icon(
+                                  LucideIcons.user,
+                                  size: 48,
+                                  color: Colors.white.withOpacity(0.6),
+                                ),
                               ),
                             ),
                           ),
@@ -90,15 +99,25 @@ class ProfilePage extends ConsumerWidget {
                             bottom: 4,
                             right: 4,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppTheme.primary,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppTheme.backgroundDark, width: 2),
+                                border: Border.all(
+                                  color: AppTheme.backgroundDark,
+                                  width: 2,
+                                ),
                               ),
                               child: const Text(
                                 'LVL 42',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -107,7 +126,8 @@ class ProfilePage extends ConsumerWidget {
                       const SizedBox(height: 16),
                       Text(
                         user.displayName,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
                               fontWeight: FontWeight.w800,
                               letterSpacing: -0.5,
                             ),
@@ -118,13 +138,19 @@ class ProfilePage extends ConsumerWidget {
                         children: [
                           Text(
                             user.rizzTitle,
-                            style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           Container(
                             width: 4,
                             height: 4,
                             margin: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: const BoxDecoration(color: Colors.white38, shape: BoxShape.circle),
+                            decoration: const BoxDecoration(
+                              color: Colors.white38,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                           Text(
                             'ELO Rating: ${user.eloRating}',
@@ -143,11 +169,20 @@ class ProfilePage extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
                   child: Row(
                     children: [
-                      Expanded(child: _StatBox(label: 'Wins', value: '${user.wins}')),
+                      Expanded(
+                        child: _StatBox(label: 'Wins', value: '${user.wins}'),
+                      ),
                       const SizedBox(width: 8),
-                      Expanded(child: _StatBox(label: 'Win Rate', value: '$winRate%')),
+                      Expanded(
+                        child: _StatBox(label: 'Win Rate', value: '$winRate%'),
+                      ),
                       const SizedBox(width: 8),
-                      Expanded(child: _StatBox(label: 'Peak', value: '${user.eloRating}')),
+                      Expanded(
+                        child: _StatBox(
+                          label: 'Peak',
+                          value: '${user.eloRating}',
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -178,7 +213,9 @@ class ProfilePage extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: AppTheme.primary.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.primary.withOpacity(0.1)),
+                          border: Border.all(
+                            color: AppTheme.primary.withOpacity(0.1),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -193,7 +230,10 @@ class ProfilePage extends ConsumerWidget {
                                   width: 64,
                                   height: 64,
                                   color: AppTheme.primary.withOpacity(0.2),
-                                  child: const Icon(LucideIcons.user, color: AppTheme.primary),
+                                  child: const Icon(
+                                    LucideIcons.user,
+                                    color: AppTheme.primary,
+                                  ),
                                 ),
                               ),
                             ),
@@ -204,11 +244,17 @@ class ProfilePage extends ConsumerWidget {
                                 children: [
                                   Text(
                                     '${kAICharacters.first.name}-7',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
                                   ),
                                   const Text(
                                     'Seduction & Wit Specialist',
-                                    style: TextStyle(fontSize: 12, color: Colors.white54),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white54,
+                                    ),
                                   ),
                                   const SizedBox(height: 8),
                                   ClipRRect(
@@ -217,18 +263,28 @@ class ProfilePage extends ConsumerWidget {
                                       value: 0.85,
                                       minHeight: 6,
                                       backgroundColor: Colors.grey[800],
-                                      valueColor: const AlwaysStoppedAnimation(AppTheme.primary),
+                                      valueColor: const AlwaysStoppedAnimation(
+                                        AppTheme.primary,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   const Text(
                                     'Affinity Level 85%',
-                                    style: TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.w600),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: AppTheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                            const Icon(LucideIcons.sparkles, color: AppTheme.primary, size: 20),
+                            const Icon(
+                              LucideIcons.sparkles,
+                              color: AppTheme.primary,
+                              size: 20,
+                            ),
                           ],
                         ),
                       ),
@@ -262,21 +318,101 @@ class ProfilePage extends ConsumerWidget {
                             onPressed: () {},
                             child: const Text(
                               'View All',
-                              style: TextStyle(color: AppTheme.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                color: AppTheme.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      _HistoryRow(win: true, name: 'Seraphina AI', elo: '+24', time: '2 hours ago'),
+                      _HistoryRow(
+                        win: true,
+                        name: 'Seraphina AI',
+                        elo: '+24',
+                        time: '2 hours ago',
+                      ),
                       const SizedBox(height: 8),
-                      _HistoryRow(win: false, name: 'Rogue-Bot', elo: '-18', time: '5 hours ago'),
+                      _HistoryRow(
+                        win: false,
+                        name: 'Rogue-Bot',
+                        elo: '-18',
+                        time: '5 hours ago',
+                      ),
                       const SizedBox(height: 8),
-                      _HistoryRow(win: true, name: 'Nexus Unit', elo: '+12', time: 'Yesterday'),
+                      _HistoryRow(
+                        win: true,
+                        name: 'Nexus Unit',
+                        elo: '+12',
+                        time: 'Yesterday',
+                      ),
                     ],
                   ),
                 ),
               ),
+
+              // Logout button
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 32, 16, 0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: const Color(0xFF1E1634),
+                            title: const Text(
+                              'Log Out',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            content: const Text(
+                              'Are you sure you want to log out?',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text(
+                                  'Log Out',
+                                  style: TextStyle(color: Colors.redAccent),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true) {
+                          await ref.read(authServiceProvider).signOut();
+                        }
+                      },
+                      icon: const Icon(LucideIcons.logOut, size: 18),
+                      label: const Text(
+                        'LOG OUT',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(color: Colors.redAccent),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           );
@@ -317,7 +453,11 @@ class _StatBox extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primary),
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primary,
+            ),
           ),
         ],
       ),
@@ -354,7 +494,9 @@ class _HistoryRow extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: win ? Colors.greenAccent.withOpacity(0.2) : Colors.redAccent.withOpacity(0.2),
+              color: win
+                  ? Colors.greenAccent.withOpacity(0.2)
+                  : Colors.redAccent.withOpacity(0.2),
             ),
             child: Icon(
               win ? LucideIcons.check : LucideIcons.x,
@@ -369,7 +511,10 @@ class _HistoryRow extends StatelessWidget {
               children: [
                 Text(
                   '${win ? 'Win' : 'Loss'} vs. $name',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 Text(
                   '$time \u2022 $elo ELO',

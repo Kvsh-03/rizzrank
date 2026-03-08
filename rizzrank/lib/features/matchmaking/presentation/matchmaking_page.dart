@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -49,6 +50,31 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
     WidgetsBinding.instance.addPostFrameCallback((_) => _startMatchmaking());
   }
 
+  /// Attempt to get the device's current location.
+  /// Returns null if permissions are denied or unavailable.
+  Future<Position?> _getLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return null;
+      }
+      if (permission == LocationPermission.deniedForever) return null;
+
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 5),
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _startMatchmaking() async {
     final matchmakingService = ref.read(matchmakingServiceProvider);
     final authUser = ref.read(authStateProvider).value;
@@ -61,7 +87,13 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
     }
 
     try {
-      final match = await matchmakingService.findMatch();
+      // Get device location for proximity matching (graceful fallback if unavailable)
+      final position = await _getLocation();
+
+      final match = await matchmakingService.findMatch(
+        lat: position?.latitude,
+        lng: position?.longitude,
+      );
 
       if (!mounted) return;
 
@@ -71,10 +103,12 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
       }
 
       // Queued -- listen for pairing by another player
-      _matchSub = matchmakingService
-          .watchForMatch(authUser.uid)
-          .listen((match) {
-        if (match != null && match.matchId.isNotEmpty && match.status == 'active') {
+      _matchSub = matchmakingService.watchForMatch(authUser.uid).listen((
+        match,
+      ) {
+        if (match != null &&
+            match.matchId.isNotEmpty &&
+            match.status == 'active') {
           _navigateToMatch(match.matchId);
         }
       });
@@ -129,16 +163,20 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                 children: [
                   IconButton(
                     onPressed: _cancelMatchmaking,
-                    icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+                    icon: const Icon(
+                      LucideIcons.arrowLeft,
+                      color: Colors.white,
+                    ),
                   ),
                   const Expanded(
                     child: Text(
                       'Matchmaking',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 48),
@@ -153,12 +191,17 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (_errorMessage != null) ...[
-                      Icon(LucideIcons.alertCircle,
-                          color: Colors.redAccent, size: 64),
+                      Icon(
+                        LucideIcons.alertCircle,
+                        color: Colors.redAccent,
+                        size: 64,
+                      ),
                       const SizedBox(height: 16),
-                      Text(_errorMessage!,
-                          style: const TextStyle(color: Colors.redAccent),
-                          textAlign: TextAlign.center),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.redAccent),
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 24),
                       ElevatedButton(
                         onPressed: () {
@@ -191,8 +234,9 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                                   value: 0.25,
                                   strokeWidth: 4,
                                   color: AppTheme.primary,
-                                  backgroundColor:
-                                      AppTheme.primary.withOpacity(0.1),
+                                  backgroundColor: AppTheme.primary.withOpacity(
+                                    0.1,
+                                  ),
                                 ),
                               ),
                             ),
@@ -203,10 +247,14 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                                 shape: BoxShape.circle,
                                 color: AppTheme.primary.withOpacity(0.1),
                                 border: Border.all(
-                                    color: AppTheme.primary.withOpacity(0.3)),
+                                  color: AppTheme.primary.withOpacity(0.3),
+                                ),
                               ),
-                              child: const Icon(LucideIcons.search,
-                                  size: 48, color: AppTheme.primary),
+                              child: const Icon(
+                                LucideIcons.search,
+                                size: 48,
+                                color: AppTheme.primary,
+                              ),
                             ),
                           ],
                         ),
@@ -215,14 +263,17 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                       Text(
                         'Finding an opponent...',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold, color: Colors.white),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       Text(
                         'Searching for ${_waitTimer}s',
                         style: TextStyle(
-                            color: AppTheme.primary.withOpacity(0.7),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
+                          color: AppTheme.primary.withOpacity(0.7),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
 
                       const SizedBox(height: 48),
@@ -234,7 +285,8 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                           color: AppTheme.primary.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                              color: AppTheme.primary.withOpacity(0.2)),
+                            color: AppTheme.primary.withOpacity(0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -242,20 +294,30 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('YOUR CHAMPION',
-                                      style: TextStyle(
-                                          color: AppTheme.primary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 1.5)),
-                                  Text('${champion.name} AI',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w900)),
-                                  Text(champion.role,
-                                      style: const TextStyle(
-                                          color: Colors.white54, fontSize: 14)),
+                                  const Text(
+                                    'YOUR CHAMPION',
+                                    style: TextStyle(
+                                      color: AppTheme.primary,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${champion.name} AI',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  Text(
+                                    champion.role,
+                                    style: const TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -265,11 +327,13 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                    color: AppTheme.primary.withOpacity(0.4),
-                                    width: 2),
+                                  color: AppTheme.primary.withOpacity(0.4),
+                                  width: 2,
+                                ),
                                 image: DecorationImage(
-                                    image: NetworkImage(champion.avatarUrl),
-                                    fit: BoxFit.cover),
+                                  image: NetworkImage(champion.avatarUrl),
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                           ],
@@ -281,11 +345,14 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                         child: CircleAvatar(
                           backgroundColor: Colors.white,
                           radius: 16,
-                          child: Text('VS',
-                              style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900)),
+                          child: Text(
+                            'VS',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
                       ),
 
@@ -296,7 +363,8 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                           color: Colors.grey[900]?.withOpacity(0.5),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                              color: AppTheme.primary.withOpacity(0.2)),
+                            color: AppTheme.primary.withOpacity(0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -307,9 +375,11 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                                 color: AppTheme.primary.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(16),
                               ),
-                              child: Icon(LucideIcons.helpCircle,
-                                  color: AppTheme.primary.withOpacity(0.3),
-                                  size: 48),
+                              child: Icon(
+                                LucideIcons.helpCircle,
+                                color: AppTheme.primary.withOpacity(0.3),
+                                size: 48,
+                              ),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
@@ -319,10 +389,11 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                                   Text(
                                     'OPPONENT',
                                     style: TextStyle(
-                                        color: Colors.white.withOpacity(0.3),
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.5),
+                                      color: Colors.white.withOpacity(0.3),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -351,7 +422,8 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                                             width: 8,
                                             height: 8,
                                             margin: const EdgeInsets.symmetric(
-                                                horizontal: 2),
+                                              horizontal: 2,
+                                            ),
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
                                               color: AppTheme.primary
@@ -385,11 +457,16 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                     side: const BorderSide(color: Colors.white24),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text('CANCEL MATCHMAKING',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  child: const Text(
+                    'CANCEL MATCHMAKING',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
                 ),
               ),
             ),

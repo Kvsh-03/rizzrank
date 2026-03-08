@@ -25,7 +25,6 @@ class BattlePage extends ConsumerStatefulWidget {
 class _BattlePageState extends ConsumerState<BattlePage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
-  bool _isLoading = false;
   Timer? _typingDebounce;
 
   void _scrollToBottom() {
@@ -58,12 +57,10 @@ class _BattlePageState extends ConsumerState<BattlePage> {
 
   Future<void> _sendMessage(String uid) async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _isLoading) return;
+    if (text.isEmpty) return;
 
-    setState(() {
-      _isLoading = true;
-      _textController.clear();
-    });
+    // Clear immediately so the user can keep typing
+    _textController.clear();
 
     // Clear typing indicator
     ref
@@ -88,8 +85,6 @@ class _BattlePageState extends ConsumerState<BattlePage> {
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -134,8 +129,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
         final opponentVibe = opponentUid != null
             ? liveMatch.vibeFor(opponentUid)
             : 0;
-        final opponentIsTyping =
-            opponentUid != null && (liveMatch.isTyping[opponentUid] == true);
+        final aiIsTyping = liveMatch.isTyping['ai_${user.uid}'] == true;
 
         return Scaffold(
           backgroundColor: AppTheme.backgroundDark,
@@ -360,30 +354,51 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                 ),
               ),
 
-              // Typing indicator
-              if (opponentIsTyping)
+              // AI Typing indicator
+              if (aiIsTyping)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 4,
+                    vertical: 8,
                   ),
                   child: Row(
                     children: [
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white38,
-                        ),
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundImage: NetworkImage(aiChar.avatarUrl),
+                        onBackgroundImageError: (_, __) {},
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'Opponent is typing...',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.pinkAccent,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${aiChar.name} is typing...',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 13,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -455,19 +470,11 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                                     color: AppTheme.primary,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: _isLoading
-                                      ? const Padding(
-                                          padding: EdgeInsets.all(8),
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Icon(
-                                          LucideIcons.send,
-                                          color: Colors.white,
-                                          size: 18,
-                                        ),
+                                  child: const Icon(
+                                    LucideIcons.send,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
                                 ),
                               ),
                             ),

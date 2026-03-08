@@ -65,6 +65,15 @@ admin.initializeApp();
 const db = admin.firestore();
 const rtdb = admin.database();
 const geminiKey = (0, params_1.defineString)("GEMINI_API_KEY");
+// Helper: resolve the API key, falling back to env var or "mock" in emulators
+function resolveApiKey() {
+    try {
+        return geminiKey.value();
+    }
+    catch {
+        return process.env.GEMINI_API_KEY || "mock";
+    }
+}
 // Re-export matchmaking callables
 var matchmaking_1 = require("./matchmaking");
 Object.defineProperty(exports, "findMatch", { enumerable: true, get: function () { return matchmaking_1.findMatch; } });
@@ -159,46 +168,80 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     const responseTimeSec = lastAITimestamp > 0
         ? (userMsgTimestamp - lastAITimestamp) / 1000
         : 4.0; // Default to sweet spot for the first message
-    // ── Get AI response via Gemini ───────────────────────────────────────
-    const aiResult = await (0, geminiChatService_1.getAIResponse)(geminiKey.value(), characterId, history, currentVibe, aiTraits, charConfig.systemInstruction);
-    // ── Score the user message via Gemini Judge ──────────────────────────
-    const scoringResult = await (0, geminiJudge_1.scoreMessage)(geminiKey.value(), characterId, lastAIMsg, userText, aiTraits);
-    // ── Apply Turn Score formula ─────────────────────────────────────────
-    const timingMult = (0, geminiJudge_1.getTimingMult)(responseTimeSec);
-    const turnResult = (0, geminiJudge_1.computeTurnScore)(scoringResult, timingMult);
-    // ── Write AI reply to player's private shard ─────────────────────────
-    await db.collection(`matches/${matchId}/players/${playerId}/messages`).add({
-        role: "model",
-        content: aiResult.text,
-        sender_uid: `ai_${characterId}`,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        rizz_delta: null,
-    });
-    // ── Update vibe in RTDB via transaction (atomic increment) ───────────
-    const newVibe = await vibeRef.transaction((current) => {
-        return (current ?? 0) + turnResult.turnScore;
-    });
-    const updatedVibe = newVibe.snapshot.val() ?? currentVibe + turnResult.turnScore;
-    // ── Write scoring breakdown back onto the original user message ──────
-    await snap.ref.update({
-        rizz_delta: turnResult.turnScore,
-        scoring: {
-            base_good: turnResult.baseGood,
-            base_bad: turnResult.baseBad,
-            persona_mult: turnResult.personaMult,
-            timing_mult: turnResult.timingMult,
-            reasoning: turnResult.reasoning,
-        },
-    });
-    console.log(`[${matchId}] ${playerId} (${vibeKey}): ` +
-        `+${turnResult.turnScore} rizz (good=${turnResult.baseGood} ×persona=${turnResult.personaMult} ` +
-        `×timing=${turnResult.timingMult} −bad=${turnResult.baseBad}) ` +
-        `→ ${updatedVibe} total` +
-        (aiResult.isDateAsk ? " ★ DATE ASK DETECTED" : ""));
-    // ── Win detection: if AI asked for a date, finalize the match ────────
-    if (aiResult.isDateAsk && updatedVibe > geminiChatService_1.WIN_THRESHOLD) {
-        console.log(`[${matchId}] WINNER: ${playerId}`);
-        await (0, finalizeMatch_1.finalizeMatch)({ matchId, winnerUid: playerId, playerIds });
+    // ── Set AI typing indicator in RTDB ──────────────────────────────────
+    const typingRef = rtdb.ref(`active_states/${matchId}/is_typing/ai_${playerId}`);
+    await typingRef.set(true);
+    const apiKey = resolveApiKey();
+    try {
+        // ── Get AI response via Gemini ─────────────────────────────────────
+        let aiResult;
+        let scoringResult;
+        let turnResult;
+        let aiError = false;
+        try {
+            aiResult = await (0, geminiChatService_1.getAIResponse)(apiKey, characterId, history, currentVibe, aiTraits, charConfig.systemInstruction);
+            // ── Score the user message via Gemini Judge ────────────────────────
+            scoringResult = await (0, geminiJudge_1.scoreMessage)(apiKey, characterId, lastAIMsg, userText, aiTraits);
+        }
+        catch (error) {
+            console.error(`[${matchId}] Gemini API Error:`, error);
+            aiError = true;
+            // Graceful fallback if Gemini API fails (e.g., invalid key, quota exceeded)
+            aiResult = {
+                text: "[System: AI is currently unavailable or the API key is invalid.]",
+                isDateAsk: false,
+            };
+            scoringResult = {
+                baseGood: 5, // Neutral score
+                baseBad: 0,
+                personaMult: 1.0,
+                reasoning: "Fallback score due to AI generation error.",
+            };
+        }
+        // ── Apply Turn Score formula ───────────────────────────────────────
+        const timingMult = (0, geminiJudge_1.getTimingMult)(responseTimeSec);
+        turnResult = (0, geminiJudge_1.computeTurnScore)(scoringResult, timingMult);
+        // ── Write AI reply to player's private shard ───────────────────────
+        await db.collection(`matches/${matchId}/players/${playerId}/messages`).add({
+            role: "model",
+            content: aiResult.text,
+            sender_uid: `ai_${characterId}`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            rizz_delta: aiError ? 0 : null, // Indicate error in rizz_delta if needed
+        });
+        // ── Update vibe in RTDB via transaction (atomic increment) ─────────
+        let updatedVibe = currentVibe;
+        if (!aiError) {
+            const newVibe = await vibeRef.transaction((current) => {
+                return (current ?? 0) + turnResult.turnScore;
+            });
+            updatedVibe = newVibe.snapshot.val() ?? currentVibe + turnResult.turnScore;
+        }
+        // ── Write scoring breakdown back onto the original user message ────
+        await snap.ref.update({
+            rizz_delta: aiError ? 0 : turnResult.turnScore,
+            scoring: {
+                base_good: turnResult.baseGood,
+                base_bad: turnResult.baseBad,
+                persona_mult: turnResult.personaMult,
+                timing_mult: turnResult.timingMult,
+                reasoning: turnResult.reasoning,
+            },
+        });
+        console.log(`[${matchId}] ${playerId} (${vibeKey}): ` +
+            `+${aiError ? 0 : turnResult.turnScore} rizz (good=${turnResult.baseGood} ×persona=${turnResult.personaMult} ` +
+            `×timing=${turnResult.timingMult} −bad=${turnResult.baseBad}) ` +
+            `→ ${updatedVibe} total` +
+            (aiResult.isDateAsk ? " ★ DATE ASK DETECTED" : ""));
+        // ── Win detection: if AI asked for a date, finalize the match ──────
+        if (!aiError && aiResult.isDateAsk && updatedVibe > geminiChatService_1.WIN_THRESHOLD) {
+            console.log(`[${matchId}] WINNER: ${playerId}`);
+            await (0, finalizeMatch_1.finalizeMatch)({ matchId, winnerUid: playerId, playerIds });
+        }
+    }
+    finally {
+        // ── Always clear the AI typing indicator ───────────────────────────
+        await typingRef.remove();
     }
 });
 // ─────────────────────────────────────────────────────────────────────────────
