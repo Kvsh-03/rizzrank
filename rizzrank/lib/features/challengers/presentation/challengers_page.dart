@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
-import '../../../core/providers/app_state_providers.dart';
+import '../../../core/models/ai_model.dart';
+import '../../../core/providers/ai_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
 class ChallengersPage extends ConsumerWidget {
@@ -12,7 +12,7 @@ class ChallengersPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedId = ref.watch(selectedChallengerIdProvider);
+    final aiModelsAsync = ref.watch(aiModelsProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -36,28 +36,53 @@ class ChallengersPage extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: ListView.separated(
-                  itemCount: kAICharacters.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final char = kAICharacters[index];
-                    final isSelected = selectedId == char.id;
-                    return _ChallengerCard(
-                      character: char,
-                      isSelected: isSelected,
-                      onTap: () {
-                        ref.read(selectedChallengerIdProvider.notifier).state = char.id;
-                        context.go('/matchmaking');
+                child: aiModelsAsync.when(
+                  data: (models) {
+                    if (models.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.bot, size: 64, color: Colors.white.withOpacity(0.3)),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No AI agents configured yet.',
+                              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Add agents to the ai_models collection in Firestore.',
+                              style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      itemCount: models.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final agent = models[index];
+                        return _ChallengerCard(
+                          agent: agent,
+                          onTap: () => context.go('/matchmaking'),
+                        );
                       },
                     );
                   },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(
+                    child: Text('Error: $e', style: const TextStyle(color: Colors.redAccent)),
+                  ),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
                   child: Text(
-                    'Tap a challenger to start a match, or select one on the Home tab and use Find Match.',
+                    'Tap a challenger to start a match.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12),
                   ),
@@ -73,13 +98,11 @@ class ChallengersPage extends ConsumerWidget {
 
 class _ChallengerCard extends StatelessWidget {
   const _ChallengerCard({
-    required this.character,
-    required this.isSelected,
+    required this.agent,
     required this.onTap,
   });
 
-  final AICharacter character;
-  final bool isSelected;
+  final AIModel agent;
   final VoidCallback onTap;
 
   @override
@@ -90,36 +113,23 @@ class _ChallengerCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppTheme.primary : Colors.white.withOpacity(0.1),
+            color: AppTheme.primary.withOpacity(0.3),
             width: 2,
           ),
-          color: isSelected
-              ? AppTheme.primary.withOpacity(0.1)
-              : Colors.white.withOpacity(0.03),
+          color: AppTheme.primary.withOpacity(0.05),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
-                  image: DecorationImage(
-                    image: NetworkImage(character.avatarUrl),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
+              _buildAvatar(),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      character.name,
+                      agent.name,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -128,23 +138,25 @@ class _ChallengerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      character.role,
+                      agent.role,
                       style: TextStyle(
                         color: AppTheme.primary.withOpacity(0.9),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      character.description,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
-                        fontSize: 12,
+                    if (agent.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        agent.description,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 12,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -162,6 +174,33 @@ class _ChallengerCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    if (agent.avatarUrl.isNotEmpty) {
+      return Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
+          image: DecorationImage(
+            image: NetworkImage(agent.avatarUrl),
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: AppTheme.primary.withOpacity(0.2),
+        border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
+      ),
+      child: Icon(LucideIcons.bot, color: AppTheme.primary.withOpacity(0.6), size: 32),
     );
   }
 }

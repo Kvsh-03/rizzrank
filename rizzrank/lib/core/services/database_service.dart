@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 
+import '../models/ai_model.dart';
 import '../models/firestore_match_model.dart';
 import '../models/match_model.dart';
 import '../models/user_model.dart';
@@ -146,6 +147,24 @@ class DatabaseService {
       if (val is Map) return Map<String, dynamic>.from(val);
       return null;
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Firestore: AI Models (agents) - ai_models/{agentId}
+  // ---------------------------------------------------------------------------
+
+  /// Streams all AI agents from Firestore for challenger picker and display.
+  Stream<List<AIModel>> watchAIModels() {
+    return _firestore.collection('ai_models').snapshots().map((snap) {
+      return snap.docs.map((d) => AIModel.fromFirestore(d)).toList();
+    });
+  }
+
+  /// Fetches a single AI agent by ID. Returns null if not found.
+  Future<AIModel?> getAIModelById(String id) async {
+    final doc = await _firestore.collection('ai_models').doc(id).get();
+    if (!doc.exists || doc.data() == null) return null;
+    return AIModel.fromFirestore(doc);
   }
 
   // ---------------------------------------------------------------------------

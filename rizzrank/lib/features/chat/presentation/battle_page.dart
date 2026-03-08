@@ -5,7 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
+import '../../../core/models/ai_model.dart';
+import '../../../core/models/match_model.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/providers/ai_providers.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/providers/match_providers.dart';
 import '../../../core/theme/app_theme.dart';
@@ -124,14 +127,56 @@ class _BattlePageState extends ConsumerState<BattlePage> {
               body: Center(child: Text('Match not found')));
         }
 
-        final aiChar = getCharacterById(liveMatch.aiCharacterId);
+        final aiModelAsync = ref.watch(aiModelByIdProvider(liveMatch.aiCharacterId));
         final myVibe = liveMatch.vibeFor(user.uid);
         final opponentUid = liveMatch.getOpponentUid(user.uid);
         final opponentVibe =
             opponentUid != null ? liveMatch.vibeFor(opponentUid) : 0;
         final isTypingUid = liveMatch.isTyping;
 
-        return Scaffold(
+        return aiModelAsync.when(
+          data: (aiAgent) => _buildBattleScaffold(
+            context,
+            ref,
+            user,
+            liveMatch,
+            aiAgent,
+            myVibe,
+            opponentUid,
+            opponentVibe,
+            isTypingUid,
+            messagesAsync,
+          ),
+          loading: () => Scaffold(
+            backgroundColor: AppTheme.backgroundDark,
+            body: const Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Scaffold(
+            backgroundColor: AppTheme.backgroundDark,
+            body: Center(child: Text('Error loading agent: $e')),
+          ),
+        );
+      },
+      loading: () => const Scaffold(
+          body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(
+          body: Center(child: Text('Error: $e'))),
+    );
+  }
+
+  Widget _buildBattleScaffold(
+    BuildContext context,
+    WidgetRef ref,
+    AppUser user,
+    ActiveMatchState liveMatch,
+    AIModel aiAgent,
+    int myVibe,
+    String? opponentUid,
+    int opponentVibe,
+    String? isTypingUid,
+    AsyncValue messagesAsync,
+  ) {
+    return Scaffold(
           backgroundColor: AppTheme.backgroundDark,
           appBar: AppBar(
             leading: Padding(
@@ -230,19 +275,17 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                                   color: AppTheme.primary.withOpacity(0.5),
                                   width: 2),
                             ),
-                            child: ClipOval(
-                              child: Image.network(
-                                aiChar.avatarUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Icon(LucideIcons.user,
-                                      color: Colors.white54, size: 40),
-                                ),
-                              ),
+                            child: aiAgent.avatarUrl.isNotEmpty
+                                ? ClipOval(
+                                    child: Image.network(
+                                      aiAgent.avatarUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => _avatarPlaceholder(),
+                                    ),
+                                  )
+                                : _avatarPlaceholder(),
                             ),
-                          ),
-                        ),
+                          ),  // Stack first child
                         Positioned(
                           bottom: 2,
                           right: 2,
@@ -260,12 +303,16 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(aiChar.name,
+                    Text(aiAgent.name,
                         style: const TextStyle(
                             fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text(
-                      '${aiChar.role} \u2022 "${aiChar.description.split('.').first}"',
+                      aiAgent.role.isNotEmpty && aiAgent.description.isNotEmpty
+                          ? '${aiAgent.role} \u2022 ${aiAgent.description.split('.').first}'
+                          : aiAgent.role.isNotEmpty
+                              ? aiAgent.role
+                              : aiAgent.name,
                       style: TextStyle(
                           color: Colors.white.withOpacity(0.5), fontSize: 13),
                       textAlign: TextAlign.center,
@@ -312,8 +359,8 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                       itemBuilder: (context, index) {
                         return ChatBubble(
                           message: reversedMessages[index],
-                          aiAvatarUrl: aiChar.avatarUrl,
-                          aiName: aiChar.name,
+                          aiAvatarUrl: aiAgent.avatarUrl,
+                          aiName: aiAgent.name,
                         );
                       },
                     );
@@ -440,11 +487,12 @@ class _BattlePageState extends ConsumerState<BattlePage> {
             ],
           ),
         );
-      },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) =>
-          Scaffold(body: Center(child: Text('Match Error: $e'))),
+  }
+
+  Widget _avatarPlaceholder() {
+    return Container(
+      color: Colors.grey[800],
+      child: const Icon(LucideIcons.user, color: Colors.white54, size: 40),
     );
   }
 }

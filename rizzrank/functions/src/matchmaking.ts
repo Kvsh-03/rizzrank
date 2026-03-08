@@ -18,10 +18,13 @@ const ELO_RANGE = 150;
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MATCH_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
-const AI_CHARACTERS = ["luna", "atlas", "zephyr"];
+// Fallback if ai_models collection is empty
+const FALLBACK_AGENT_IDS = ["luna", "atlas", "zephyr"];
 
-function pickRandomCharacter(): string {
-  return AI_CHARACTERS[Math.floor(Math.random() * AI_CHARACTERS.length)];
+async function getAgentIds(db: admin.firestore.Firestore): Promise<string[]> {
+  const snap = await db.collection("ai_models").limit(50).get();
+  const ids = snap.docs.map((d) => d.id);
+  return ids.length > 0 ? ids : FALLBACK_AGENT_IDS;
 }
 
 export const findMatch = onCall(async (request) => {
@@ -33,6 +36,7 @@ export const findMatch = onCall(async (request) => {
 
   const uid = request.auth.uid;
 
+  const agentIds = await getAgentIds(db);
   const userDoc = await db.doc(`users/${uid}`).get();
   if (!userDoc.exists) {
     throw new HttpsError("not-found", "User profile not found. Create a profile first.");
@@ -83,7 +87,7 @@ export const findMatch = onCall(async (request) => {
     const matchRef = db.collection("matches").doc();
     const matchId = matchRef.id;
     const playerIds = [uid, opponentUid];
-    const aiCharacterId = pickRandomCharacter();
+    const aiCharacterId = agentIds[Math.floor(Math.random() * agentIds.length)];
     const expiresAtMs = Date.now() + MATCH_DURATION_MS;
 
     transaction.set(matchRef, {

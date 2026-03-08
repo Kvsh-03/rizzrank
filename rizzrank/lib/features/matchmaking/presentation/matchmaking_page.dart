@@ -4,9 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
 import '../../../core/models/firestore_match_model.dart';
-import '../../../core/providers/app_state_providers.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -113,11 +111,6 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
 
   @override
   Widget build(BuildContext context) {
-    final selectedId = ref.watch(selectedChallengerIdProvider);
-    final champion = selectedId != null
-        ? getCharacterById(selectedId)
-        : kAICharacters.first;
-
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       body: SafeArea(
@@ -226,55 +219,6 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                       ),
 
                       const SizedBox(height: 48),
-
-                      // Champion Card
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: AppTheme.primary.withOpacity(0.2)),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('YOUR CHAMPION',
-                                      style: TextStyle(
-                                          color: AppTheme.primary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 1.5)),
-                                  Text('${champion.name} AI',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w900)),
-                                  Text(champion.role,
-                                      style: const TextStyle(
-                                          color: Colors.white54, fontSize: 14)),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              width: 90,
-                              height: 90,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                    color: AppTheme.primary.withOpacity(0.4),
-                                    width: 2),
-                                image: DecorationImage(
-                                    image: NetworkImage(champion.avatarUrl),
-                                    fit: BoxFit.cover),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
 
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16.0),

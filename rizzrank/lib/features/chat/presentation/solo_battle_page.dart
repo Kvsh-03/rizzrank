@@ -1,30 +1,30 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
+import '../../../core/models/ai_model.dart';
 import '../../../core/models/chat_message.dart';
+import '../../../core/providers/ai_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_card.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/heart_meter.dart';
 
-class SoloBattlePage extends StatefulWidget {
+class SoloBattlePage extends ConsumerStatefulWidget {
   const SoloBattlePage({super.key, required this.characterId});
 
   final String characterId;
 
   @override
-  State<SoloBattlePage> createState() => _SoloBattlePageState();
+  ConsumerState<SoloBattlePage> createState() => _SoloBattlePageState();
 }
 
-class _SoloBattlePageState extends State<SoloBattlePage> {
+class _SoloBattlePageState extends ConsumerState<SoloBattlePage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _random = Random();
-
-  late final AICharacter _character;
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
   int _affection = 45;
@@ -46,7 +46,6 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
   @override
   void initState() {
     super.initState();
-    _character = getCharacterById(widget.characterId);
     _addAiMessage(
       "Honestly, the cinematography in that scene felt a bit derivative. "
       "Change my mind? Or are you just going to agree with the critics?",
@@ -118,6 +117,21 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
 
   @override
   Widget build(BuildContext context) {
+    final aiModelAsync = ref.watch(aiModelByIdProvider(widget.characterId));
+    return aiModelAsync.when(
+      data: (agent) => _buildContent(context, agent),
+      loading: () => Scaffold(
+        backgroundColor: AppTheme.backgroundDark,
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        backgroundColor: AppTheme.backgroundDark,
+        body: Center(child: Text('Error: $e', style: const TextStyle(color: Colors.redAccent))),
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, AIModel agent) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       appBar: AppBar(
@@ -206,17 +220,23 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                               color: AppTheme.primary.withOpacity(0.5),
                               width: 2),
                         ),
-                        child: ClipOval(
-                          child: Image.network(
-                            _character.avatarUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.grey[800],
-                              child: const Icon(LucideIcons.user,
-                                  color: Colors.white54, size: 40),
-                            ),
-                          ),
-                        ),
+                        child: agent.avatarUrl.isNotEmpty
+                            ? ClipOval(
+                                child: Image.network(
+                                  agent.avatarUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: Colors.grey[800],
+                                    child: const Icon(LucideIcons.user,
+                                        color: Colors.white54, size: 40),
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                color: Colors.grey[800],
+                                child: const Icon(LucideIcons.user,
+                                    color: Colors.white54, size: 40),
+                              ),
                       ),
                     ),
                     Positioned(
@@ -236,12 +256,14 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(_character.name,
+                Text(agent.name,
                     style: const TextStyle(
                         fontSize: 24, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(
-                  '${_character.role} \u2022 "${_character.description.split('.').first}"',
+                  agent.role.isNotEmpty && agent.description.isNotEmpty
+                      ? '${agent.role} \u2022 ${agent.description.split('.').first}'
+                      : agent.role.isNotEmpty ? agent.role : agent.name,
                   style: TextStyle(
                       color: Colors.white.withOpacity(0.5), fontSize: 13),
                   textAlign: TextAlign.center,
@@ -275,14 +297,14 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
               itemBuilder: (context, index) {
                 if (index == _messages.length && _isTyping) {
                   return _TypingIndicator(
-                    avatarUrl: _character.avatarUrl,
-                    name: _character.name,
+                    avatarUrl: agent.avatarUrl,
+                    name: agent.name,
                   );
                 }
                 return ChatBubble(
                   message: _messages[index],
-                  aiAvatarUrl: _character.avatarUrl,
-                  aiName: _character.name,
+                  aiAvatarUrl: agent.avatarUrl,
+                  aiName: agent.name,
                 );
               },
             ),
@@ -414,7 +436,11 @@ class _TypingIndicator extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundImage: NetworkImage(avatarUrl),
+            backgroundColor: Colors.grey[800],
+            backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+            child: avatarUrl.isEmpty
+                ? const Icon(LucideIcons.user, color: Colors.white54, size: 20)
+                : null,
           ),
           const SizedBox(width: 8),
           GlassCard(

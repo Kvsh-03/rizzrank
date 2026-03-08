@@ -44,6 +44,13 @@ final messagesStreamProvider = StreamProvider.family<List<ChatMessage>,
   });
 });
 
+/// Streams match history for a user.
+final matchHistoryStreamProvider =
+    StreamProvider.family<List<FirestoreMatch>, String>((ref, uid) {
+  final dbService = ref.watch(databaseServiceProvider);
+  return dbService.watchMatchHistory(uid);
+});
+
 /// Streams presence data for a specific user.
 final presenceProvider =
     StreamProvider.family<Map<String, dynamic>?, String>((ref, uid) {

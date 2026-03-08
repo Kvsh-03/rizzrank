@@ -2,38 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/data/ai_characters.dart';
+import '../../../core/models/ai_model.dart';
+import '../../../core/models/firestore_match_model.dart';
+import '../../../core/providers/ai_providers.dart';
+import '../../../core/providers/firebase_providers.dart';
+import '../../../core/providers/match_providers.dart';
 import '../../../core/theme/app_theme.dart';
-
-class _MatchHistoryEntry {
-  final int id;
-  final String characterId;
-  final String result;
-  final String score;
-  final String date;
-  final String eloChange;
-
-  const _MatchHistoryEntry({
-    required this.id,
-    required this.characterId,
-    required this.result,
-    required this.score,
-    required this.date,
-    required this.eloChange,
-  });
-}
-
-const _mockHistory = [
-  _MatchHistoryEntry(id: 1, characterId: 'luna', result: 'WIN', score: '2-1', date: '2 hours ago', eloChange: '+25'),
-  _MatchHistoryEntry(id: 2, characterId: 'atlas', result: 'LOSS', score: '0-3', date: '1 day ago', eloChange: '-12'),
-  _MatchHistoryEntry(id: 3, characterId: 'zephyr', result: 'WIN', score: '3-0', date: '2 days ago', eloChange: '+18'),
-];
 
 class HistoryPage extends ConsumerWidget {
   const HistoryPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final authUser = ref.watch(authStateProvider).value;
+    if (authUser == null) {
+      return const Scaffold(
+        body: Center(child: Text('Not signed in', style: TextStyle(color: Colors.white54))),
+      );
+    }
+
+    final historyAsync = ref.watch(
+      matchHistoryStreamProvider(authUser.uid),
+    );
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -50,20 +41,35 @@ class HistoryPage extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: _mockHistory.isEmpty
-                    ? const Center(
+                child: historyAsync.when(
+                  data: (matches) {
+                    if (matches.isEmpty) {
+                      return const Center(
                         child: Text('No matches played yet.', style: TextStyle(color: Colors.white54)),
-                      )
-                    : ListView.separated(
-                        itemCount: _mockHistory.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final match = _mockHistory[index];
-                          final char = getCharacterById(match.characterId);
-                          final isWin = match.result == 'WIN';
-                          return _MatchCard(match: match, character: char, isWin: isWin);
-                        },
-                      ),
+                      );
+                    }
+                    return ListView.separated(
+                      itemCount: matches.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final match = matches[index];
+                        final isWin = match.winnerId == authUser.uid;
+                        final eloChange = match.eloChange[authUser.uid] ?? 0;
+                        final eloStr = eloChange >= 0 ? '+$eloChange' : '$eloChange';
+                        return _MatchCard(
+                          match: match,
+                          isWin: isWin,
+                          eloChange: eloStr,
+                          authUid: authUser.uid,
+                        );
+                      },
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(
+                    child: Text('Error: $e', style: const TextStyle(color: Colors.redAccent)),
+                  ),
+                ),
               ),
             ],
           ),
@@ -73,19 +79,37 @@ class HistoryPage extends ConsumerWidget {
   }
 }
 
-class _MatchCard extends StatelessWidget {
+class _MatchCard extends ConsumerWidget {
   const _MatchCard({
     required this.match,
-    required this.character,
     required this.isWin,
+    required this.eloChange,
+    required this.authUid,
   });
 
-  final _MatchHistoryEntry match;
-  final AICharacter character;
+  final FirestoreMatch match;
   final bool isWin;
+  final String eloChange;
+  final String authUid;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final aiModelAsync = ref.watch(
+      aiModelByIdProvider(match.aiCharacterId ?? 'unknown'),
+    );
+
+    return aiModelAsync.when(
+      data: (agent) => _buildCard(context, agent),
+      loading: () => _buildCard(context, AIModel.placeholder(match.aiCharacterId ?? 'unknown')),
+      error: (_, __) => _buildCard(context, AIModel.placeholder(match.aiCharacterId ?? 'unknown')),
+    );
+  }
+
+  Widget _buildCard(BuildContext context, AIModel character) {
+    final dateStr = match.createdAt != null
+        ? _formatDate(match.createdAt!)
+        : 'Unknown';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -95,25 +119,23 @@ class _MatchCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Character avatar with result overlay
           SizedBox(
             width: 64,
             height: 64,
             child: Stack(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.network(
-                    character.avatarUrl,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[800],
-                      child: const Icon(LucideIcons.user, color: Colors.white54),
-                    ),
-                  ),
-                ),
+                character.avatarUrl.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          character.avatarUrl,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _avatarPlaceholder(),
+                        ),
+                      )
+                    : _avatarPlaceholder(),
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -145,7 +167,7 @@ class _MatchCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                     Text(
-                      match.result,
+                      isWin ? 'WIN' : 'LOSS',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
@@ -160,12 +182,12 @@ class _MatchCard extends StatelessWidget {
                     Icon(LucideIcons.calendar, size: 12, color: Colors.white.withOpacity(0.4)),
                     const SizedBox(width: 4),
                     Text(
-                      match.date,
+                      dateStr,
                       style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4)),
                     ),
                     const SizedBox(width: 16),
                     Text(
-                      'Score: ${match.score}',
+                      '$eloChange ELO',
                       style: TextStyle(
                         fontSize: 12,
                         fontFamily: 'monospace',
@@ -179,7 +201,7 @@ class _MatchCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            '${match.eloChange} ELO',
+            '$eloChange ELO',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -189,5 +211,22 @@ class _MatchCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _avatarPlaceholder() {
+    return Container(
+      color: Colors.grey[800],
+      child: const Icon(LucideIcons.user, color: Colors.white54),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hours ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    return '${dt.month}/${dt.day}/${dt.year}';
   }
 }
