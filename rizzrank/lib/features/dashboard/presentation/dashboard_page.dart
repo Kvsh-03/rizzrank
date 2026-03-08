@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../auth/data/auth_service.dart';
 
 import '../../../core/data/ai_characters.dart';
 import '../../../core/providers/app_state_providers.dart';
@@ -20,7 +21,12 @@ class DashboardPage extends ConsumerWidget {
       body: userAsync.when(
         data: (user) {
           if (user == null) {
-            return const Center(child: Text('User not found.'));
+            // No profile found — sign out the stale session and go to login
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              ref.read(authServiceProvider).signOut();
+              if (context.mounted) context.go('/login');
+            });
+            return const Center(child: CircularProgressIndicator());
           }
 
           final winRate = user.totalGames > 0
@@ -44,16 +50,22 @@ class DashboardPage extends ConsumerWidget {
                           border: Border.all(color: AppTheme.primary, width: 2),
                           color: Colors.grey[800],
                         ),
-                        child: const Icon(LucideIcons.user, size: 20, color: Colors.white54),
+                        child: const Icon(
+                          LucideIcons.user,
+                          size: 20,
+                          color: Colors.white54,
+                        ),
                       ),
                       const SizedBox(width: 12),
-                      const Text('RizzRank',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const Spacer(),
-                      _HeaderIconButton(
-                        icon: LucideIcons.bell,
-                        onTap: () {},
+                      const Text(
+                        'RizzRank',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
+                      const Spacer(),
+                      _HeaderIconButton(icon: LucideIcons.bell, onTap: () {}),
                       const SizedBox(width: 8),
                       _HeaderIconButton(
                         icon: LucideIcons.settings,
@@ -101,7 +113,11 @@ class DashboardPage extends ConsumerWidget {
                             ),
                           ),
                           child: const Center(
-                            child: Icon(LucideIcons.diamond, size: 48, color: Colors.white),
+                            child: Icon(
+                              LucideIcons.diamond,
+                              size: 48,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -111,20 +127,25 @@ class DashboardPage extends ConsumerWidget {
                   Text(
                     'ELO: ${user.eloRating}',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.5,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppTheme.primary.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                          border: Border.all(
+                            color: AppTheme.primary.withOpacity(0.3),
+                          ),
                         ),
                         child: Text(
                           user.rizzTitle.toUpperCase(),
@@ -138,7 +159,10 @@ class DashboardPage extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Text(
                         'Top 2% Worldwide',
-                        style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
@@ -165,9 +189,7 @@ class DashboardPage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: _WinRateCard(winRate: winRate),
-                      ),
+                      Expanded(child: _WinRateCard(winRate: winRate)),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -178,9 +200,9 @@ class DashboardPage extends ConsumerWidget {
                     child: Text(
                       'Pick your opponent',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white.withOpacity(0.8),
-                          ),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -188,7 +210,10 @@ class DashboardPage extends ConsumerWidget {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Select an AI challenger, then tap Find Match',
-                      style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.4),
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -203,7 +228,9 @@ class DashboardPage extends ConsumerWidget {
                         final isSelected = selectedId == char.id;
                         return GestureDetector(
                           onTap: () {
-                            ref.read(selectedChallengerIdProvider.notifier).state =
+                            ref
+                                    .read(selectedChallengerIdProvider.notifier)
+                                    .state =
                                 char.id;
                           },
                           child: Column(
@@ -222,6 +249,7 @@ class DashboardPage extends ConsumerWidget {
                                   image: DecorationImage(
                                     image: NetworkImage(char.avatarUrl),
                                     fit: BoxFit.cover,
+                                    onError: (_, __) {},
                                   ),
                                 ),
                               ),
@@ -254,9 +282,9 @@ class DashboardPage extends ConsumerWidget {
                     child: Text(
                       'Local Leaderboard',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white.withOpacity(0.8),
-                          ),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -264,7 +292,9 @@ class DashboardPage extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.primary.withOpacity(0.1)),
+                      border: Border.all(
+                        color: AppTheme.primary.withOpacity(0.1),
+                      ),
                     ),
                     child: Column(
                       children: [
@@ -275,16 +305,24 @@ class DashboardPage extends ConsumerWidget {
                           score: '2,140',
                           avatarSeed: 'Viper',
                         ),
-                        Divider(height: 1, color: AppTheme.primary.withOpacity(0.1)),
+                        Divider(
+                          height: 1,
+                          color: AppTheme.primary.withOpacity(0.1),
+                        ),
                         _LeaderboardRow(
                           rank: 12,
-                          name: user.displayName.isNotEmpty ? user.displayName : 'You',
+                          name: user.displayName.isNotEmpty
+                              ? user.displayName
+                              : 'You',
                           role: user.rizzTitle,
                           score: '${user.eloRating}',
                           avatarSeed: 'You',
                           isActive: true,
                         ),
-                        Divider(height: 1, color: AppTheme.primary.withOpacity(0.1)),
+                        Divider(
+                          height: 1,
+                          color: AppTheme.primary.withOpacity(0.1),
+                        ),
                         _LeaderboardRow(
                           rank: 13,
                           name: 'ShadowByte',
@@ -302,7 +340,42 @@ class DashboardPage extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error loading profile: $error')),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  LucideIcons.alertTriangle,
+                  color: Colors.redAccent,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading profile',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString().contains('permission-denied')
+                      ? 'You don\'t have permission to access this profile. Try signing in again.'
+                      : '$error',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () async {
+                    await ref.read(authServiceProvider).signOut();
+                    if (context.mounted) context.go('/login');
+                  },
+                  child: const Text('Sign Out & Login'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -373,9 +446,10 @@ class _StatCard extends StatelessWidget {
             Text(
               trend!,
               style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: trendColor ?? Colors.white54),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: trendColor ?? Colors.white54,
+              ),
             ),
           ],
         ],
@@ -411,8 +485,10 @@ class _WinRateCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text('$winRate%',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(
+            '$winRate%',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
@@ -458,10 +534,10 @@ class _FindMatchButton extends StatelessWidget {
             Text(
               'FIND MATCH',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    fontStyle: FontStyle.italic,
-                    letterSpacing: 4,
-                  ),
+                fontWeight: FontWeight.w900,
+                fontStyle: FontStyle.italic,
+                letterSpacing: 4,
+              ),
             ),
           ],
         ),
@@ -519,20 +595,28 @@ class _LeaderboardRow extends StatelessWidget {
             radius: 20,
             backgroundColor: Colors.grey[800],
             backgroundImage: NetworkImage(
-                'https://api.dicebear.com/7.x/avataaars/svg?seed=$avatarSeed'),
+              'https://api.dicebear.com/7.x/avataaars/png?seed=$avatarSeed',
+            ),
+            onBackgroundImageError: (_, __) {},
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
                 Text(
                   role.toUpperCase(),
                   style: TextStyle(
-                      fontSize: 10, color: Colors.white.withOpacity(0.3)),
+                    fontSize: 10,
+                    color: Colors.white.withOpacity(0.3),
+                  ),
                 ),
               ],
             ),

@@ -17,18 +17,59 @@ class _LeaderboardPlayer {
     required this.avatarSeed,
   });
 
-  String get avatarUrl => 'https://api.dicebear.com/7.x/avataaars/svg?seed=$avatarSeed';
+  String get avatarUrl =>
+      'https://api.dicebear.com/7.x/avataaars/png?seed=$avatarSeed';
 }
 
 const _mockPlayers = [
-  _LeaderboardPlayer(username: 'ViperKing', elo: 2140, wins: 89, avatarSeed: 'Viper'),
-  _LeaderboardPlayer(username: 'NeonQueen', elo: 2012, wins: 76, avatarSeed: 'Neon'),
-  _LeaderboardPlayer(username: 'RizzLord99', elo: 1950, wins: 71, avatarSeed: 'Rizz'),
-  _LeaderboardPlayer(username: 'CharmMaster', elo: 1890, wins: 65, avatarSeed: 'Charm'),
-  _LeaderboardPlayer(username: 'SilverTongue', elo: 1820, wins: 58, avatarSeed: 'Silver'),
-  _LeaderboardPlayer(username: 'ShadowByte', elo: 1780, wins: 52, avatarSeed: 'Shadow'),
-  _LeaderboardPlayer(username: 'FlirtBot', elo: 1720, wins: 47, avatarSeed: 'Flirt'),
-  _LeaderboardPlayer(username: 'DigitalDon', elo: 1680, wins: 43, avatarSeed: 'Digital'),
+  _LeaderboardPlayer(
+    username: 'ViperKing',
+    elo: 2140,
+    wins: 89,
+    avatarSeed: 'Viper',
+  ),
+  _LeaderboardPlayer(
+    username: 'NeonQueen',
+    elo: 2012,
+    wins: 76,
+    avatarSeed: 'Neon',
+  ),
+  _LeaderboardPlayer(
+    username: 'RizzLord99',
+    elo: 1950,
+    wins: 71,
+    avatarSeed: 'Rizz',
+  ),
+  _LeaderboardPlayer(
+    username: 'CharmMaster',
+    elo: 1890,
+    wins: 65,
+    avatarSeed: 'Charm',
+  ),
+  _LeaderboardPlayer(
+    username: 'SilverTongue',
+    elo: 1820,
+    wins: 58,
+    avatarSeed: 'Silver',
+  ),
+  _LeaderboardPlayer(
+    username: 'ShadowByte',
+    elo: 1780,
+    wins: 52,
+    avatarSeed: 'Shadow',
+  ),
+  _LeaderboardPlayer(
+    username: 'FlirtBot',
+    elo: 1720,
+    wins: 47,
+    avatarSeed: 'Flirt',
+  ),
+  _LeaderboardPlayer(
+    username: 'DigitalDon',
+    elo: 1680,
+    wins: 43,
+    avatarSeed: 'Digital',
+  ),
 ];
 
 class LeaderboardPage extends ConsumerWidget {
@@ -53,14 +94,27 @@ class LeaderboardPage extends ConsumerWidget {
                         color: AppTheme.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(LucideIcons.trophy, color: Colors.white, size: 20),
+                      child: const Icon(
+                        LucideIcons.trophy,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Text(
                       'RizzRank',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    Text('.pro', style: TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(
+                      '.pro',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -76,7 +130,9 @@ class LeaderboardPage extends ConsumerWidget {
                 children: [
                   Text(
                     'Global Leaderboard',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
@@ -120,26 +176,45 @@ class LeaderboardPage extends ConsumerWidget {
                   children: [
                     // Table header
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
                       child: Row(
                         children: [
-                          const SizedBox(width: 32, child: Text('RANK', style: _headerStyle)),
+                          const SizedBox(
+                            width: 32,
+                            child: Text('RANK', style: _headerStyle),
+                          ),
                           const SizedBox(width: 16),
-                          const Expanded(child: Text('USERNAME', style: _headerStyle)),
-                          const SizedBox(width: 80, child: Text('RATING', style: _headerStyle, textAlign: TextAlign.right)),
-                          const SizedBox(width: 60, child: Text('WINS', style: _headerStyle, textAlign: TextAlign.right)),
+                          const Expanded(
+                            child: Text('USERNAME', style: _headerStyle),
+                          ),
+                          const SizedBox(
+                            width: 80,
+                            child: Text(
+                              'RATING',
+                              style: _headerStyle,
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                          const SizedBox(
+                            width: 60,
+                            child: Text(
+                              'WINS',
+                              style: _headerStyle,
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const Divider(height: 1, color: Colors.white10),
-                    ...List.generate(
-                      _mockPlayers.length - 3,
-                      (i) {
-                        final player = _mockPlayers[i + 3];
-                        final rank = i + 4;
-                        return _RankRow(player: player, rank: rank);
-                      },
-                    ),
+                    ...List.generate(_mockPlayers.length - 3, (i) {
+                      final player = _mockPlayers[i + 3];
+                      final rank = i + 4;
+                      return _RankRow(player: player, rank: rank);
+                    }),
                     // View full rankings
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -155,7 +230,11 @@ class LeaderboardPage extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          Icon(LucideIcons.arrowRight, color: AppTheme.primary, size: 16),
+                          Icon(
+                            LucideIcons.arrowRight,
+                            color: AppTheme.primary,
+                            size: 16,
+                          ),
                         ],
                       ),
                     ),
@@ -187,9 +266,18 @@ class _PodiumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = [
-      (border: const Color(0xFFEAB308), bg: const Color(0xFFEAB308).withOpacity(0.1)),
-      (border: const Color(0xFF94A3B8), bg: const Color(0xFF94A3B8).withOpacity(0.1)),
-      (border: const Color(0xFF92400E), bg: const Color(0xFF92400E).withOpacity(0.1)),
+      (
+        border: const Color(0xFFEAB308),
+        bg: const Color(0xFFEAB308).withOpacity(0.1),
+      ),
+      (
+        border: const Color(0xFF94A3B8),
+        bg: const Color(0xFF94A3B8).withOpacity(0.1),
+      ),
+      (
+        border: const Color(0xFF92400E),
+        bg: const Color(0xFF92400E).withOpacity(0.1),
+      ),
     ];
     final c = colors[rank - 1];
 
@@ -214,7 +302,11 @@ class _PodiumCard extends StatelessWidget {
               ),
               child: Text(
                 rank == 1 ? '#1 CHAMPION' : '#$rank',
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -246,12 +338,20 @@ class _PodiumCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             '${player.elo} ELO',
-            style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 13),
+            style: const TextStyle(
+              color: AppTheme.primary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Wins: ${player.wins}',
-            style: const TextStyle(fontSize: 10, letterSpacing: 1.5, color: Colors.white38),
+            style: const TextStyle(
+              fontSize: 10,
+              letterSpacing: 1.5,
+              color: Colors.white38,
+            ),
           ),
         ],
       ),
@@ -275,7 +375,10 @@ class _RankRow extends StatelessWidget {
             width: 32,
             child: Text(
               '#$rank',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white54),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white54,
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -283,6 +386,7 @@ class _RankRow extends StatelessWidget {
             radius: 16,
             backgroundColor: Colors.grey[800],
             backgroundImage: NetworkImage(player.avatarUrl),
+            onBackgroundImageError: (_, __) {},
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -296,7 +400,10 @@ class _RankRow extends StatelessWidget {
             width: 80,
             child: Text(
               '${player.elo}',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
               textAlign: TextAlign.right,
             ),
           ),

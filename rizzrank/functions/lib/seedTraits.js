@@ -41,8 +41,11 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const admin = __importStar(require("firebase-admin"));
 const traitData_1 = require("./traitData");
+const PROJECT_ID = process.env.GCLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT_ID ||
+    "rizzrank-f52cd";
 if (!admin.apps.length) {
-    admin.initializeApp();
+    admin.initializeApp({ projectId: PROJECT_ID });
 }
 const db = admin.firestore();
 async function seedTraits() {

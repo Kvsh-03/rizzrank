@@ -14,12 +14,19 @@ exports.computeTurnScore = computeTurnScore;
 const generative_ai_1 = require("@google/generative-ai");
 const characters_1 = require("./characters");
 const SCORING_MODEL = "gemini-2.0-flash-lite";
-function buildScoringPrompt(characterDescription, characterName, lastAIMessage, userMessage) {
+function buildScoringPrompt(characterDescription, characterName, lastAIMessage, userMessage, aiTraits = {}) {
+    let traitContext = "";
+    if (aiTraits && Object.keys(aiTraits).length > 0) {
+        const traitParts = Object.entries(aiTraits)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ");
+        traitContext = `\nPersona traits: ${traitParts}`;
+    }
     return `You are a dating coach AI judge. Evaluate the user's message for "rizz" (charm/flirting skill).
 
 You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
 
-Character: ${characterName} - ${characterDescription}
+Character: ${characterName} - ${characterDescription}${traitContext}
 
 The character's last message: "${lastAIMessage}"
 The user's response: "${userMessage}"
@@ -54,9 +61,18 @@ function getTimingMult(responseTimeSeconds) {
 /**
  * Asks Gemini to score a user message and returns the raw scoring components.
  */
-async function scoreMessage(apiKey, characterId, lastAIMessage, userMessage) {
+async function scoreMessage(apiKey, characterId, lastAIMessage, userMessage, aiTraits = {}) {
     const character = (0, characters_1.getCharacter)(characterId);
-    const prompt = buildScoringPrompt(character.description, character.name, lastAIMessage, userMessage);
+    const prompt = buildScoringPrompt(character.description, character.name, lastAIMessage, userMessage, aiTraits);
+    if (!apiKey || apiKey === "mock") {
+        console.log("[MOCK] scoreMessage called with empty or mock API key");
+        return {
+            baseGood: 8,
+            baseBad: 0,
+            personaMult: 1.0,
+            reasoning: "[MOCK] This is a mocked score because no API key was provided.",
+        };
+    }
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: SCORING_MODEL });
     const result = await model.generateContent(prompt);

@@ -7,10 +7,18 @@ import '../services/database_service.dart';
 import '../services/matchmaking_service.dart';
 import '../models/user_model.dart';
 
-final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
-final firebaseDatabaseProvider = Provider<FirebaseDatabase>((ref) => FirebaseDatabase.instance);
-final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
-final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) => FirebaseFunctions.instance);
+final firebaseAuthProvider = Provider<FirebaseAuth>(
+  (ref) => FirebaseAuth.instance,
+);
+final firebaseDatabaseProvider = Provider<FirebaseDatabase>(
+  (ref) => FirebaseDatabase.instance,
+);
+final firestoreProvider = Provider<FirebaseFirestore>(
+  (ref) => FirebaseFirestore.instance,
+);
+final firebaseFunctionsProvider = Provider<FirebaseFunctions>(
+  (ref) => FirebaseFunctions.instance,
+);
 
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
   return DatabaseService(
@@ -31,7 +39,13 @@ final authStateProvider = StreamProvider<User?>((ref) {
 });
 
 final currentUserProvider = StreamProvider<AppUser?>((ref) {
-  final authUser = ref.watch(authStateProvider).value;
-  if (authUser == null) return const Stream.empty();
-  return ref.watch(databaseServiceProvider).watchUserProfile(authUser.uid);
+  final authAsync = ref.watch(authStateProvider);
+  return authAsync.when(
+    data: (authUser) {
+      if (authUser == null) return Stream.value(null);
+      return ref.watch(databaseServiceProvider).watchUserProfile(authUser.uid);
+    },
+    loading: () => const Stream.empty(), // keeps AsyncLoading
+    error: (e, st) => Stream.error(e, st),
+  );
 });

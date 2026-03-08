@@ -56,7 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           state.matchedLocation == '/login' || state.matchedLocation == '/';
 
       if (!isAuth && !isGoingToLogin) {
-        return '/';
+        return '/login';
       }
 
       if (isAuth && isGoingToLogin) {
@@ -66,14 +66,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const LandingPage(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginPage(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const LandingPage()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
         path: '/matchmaking',
         builder: (context, state) => const MatchmakingPage(),
@@ -104,31 +98,46 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),
         branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/dashboard',
-                builder: (context, state) => const DashboardPage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
+                builder: (context, state) => const DashboardPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/leaderboard',
-                builder: (context, state) => const LeaderboardPage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
+                builder: (context, state) => const LeaderboardPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/challengers',
-                builder: (context, state) => const ChallengersPage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
+                builder: (context, state) => const ChallengersPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/history',
-                builder: (context, state) => const HistoryPage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
+                builder: (context, state) => const HistoryPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/profile',
-                builder: (context, state) => const ProfilePage()),
-          ]),
+                builder: (context, state) => const ProfilePage(),
+              ),
+            ],
+          ),
         ],
       ),
     ],
