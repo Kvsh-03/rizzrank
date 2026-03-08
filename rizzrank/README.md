@@ -1,8 +1,8 @@
 # rizzrank
 
-🏁 Rizz Race: The AI Dating Duel
+🏁 RizzRank: The AI Dating Duel
 
-Rizz Race is a high-stakes, competitive social engineering game where two players race to charm an AI agent. Built with Flutter and Firebase, the game pits your "rizz" against a rival in a real-time battle of wits, persuasion, and romantic strategy.
+RizzRank is a high-stakes, competitive social engineering game where two players race to charm an AI agent. Built with Flutter and Firebase, the game pits your "rizz" against a rival in a real-time battle of wits, persuasion, and romantic strategy.
 💘 The Pitch
 
 Two rivals, one stubborn AI. Each round features a unique agent with randomized personality traits. Your goal? Be the first to charm the bot into agreeing to a date. Climb the global ELO leaderboard and prove you’re the ultimate smooth-talker—or die trying (metaphorically).
