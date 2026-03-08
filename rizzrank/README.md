@@ -57,6 +57,16 @@ firebase deploy
 
 **Cloud Functions secrets** (required for deploy): Set `OPENROUTER_API_KEY` and `GEMINI_API_KEY` via `firebase functions:secrets:set`.
 
+### Google Sign-In on macOS
+
+The app builds and runs on macOS without code signing. However, **Google Sign-In will fail with a keychain-error** until signing is enabled. To fix:
+
+1. Open `macos/Runner.xcworkspace` in Xcode.
+2. Select the **Runner** target → **Signing & Capabilities**.
+3. Enable **Automatically manage signing** and select your **Team** (add your Apple ID in Xcode → Preferences → Accounts if needed).
+4. Add the Keychain Sharing capability (or add `keychain-access-groups` to `macos/Runner/DebugProfile.entitlements` matching the format in `Release.entitlements`).
+5. Rebuild with `flutter run -d macos`.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
