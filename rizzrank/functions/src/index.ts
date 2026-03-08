@@ -21,10 +21,11 @@
 import * as admin from "firebase-admin";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineString } from "firebase-functions/params";
 import { getAIResponse, WIN_THRESHOLD } from "./geminiChatService";
 import { scoreMessage, getTimingMult, computeTurnScore } from "./geminiJudge";
-import { getCharacter } from "./characters";
+import { getCharacter, AI_CHARACTERS } from "./characters";
 import { finalizeMatch, drawMatch } from "./finalizeMatch";
 
 admin.initializeApp();
@@ -47,6 +48,30 @@ function resolveApiKey(): string {
 
 // Re-export matchmaking callables
 export { findMatch, leaveQueue } from "./matchmaking";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One-time seed: seedAiModels callable. Invoke once to populate ai_models.
+// Run from Flutter: FirebaseFunctions.instance.httpsCallable('seedAiModels').call()
+// ─────────────────────────────────────────────────────────────────────────────
+export const seedAiModels = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in to seed.");
+  }
+  const batch = db.batch();
+  for (const char of AI_CHARACTERS) {
+    const ref = db.collection("ai_models").doc(char.id);
+    batch.set(ref, {
+      name: char.name,
+      personality_summary: char.description,
+      system_prompt: char.systemInstruction,
+      role: char.role,
+      avatar_url: char.avatar,
+      difficulty: char.difficulty,
+    });
+  }
+  await batch.commit();
+  return { success: true, count: AI_CHARACTERS.length };
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: load AI character from Firestore ai_models, falling back to hardcoded

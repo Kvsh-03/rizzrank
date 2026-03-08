@@ -14,6 +14,20 @@ class DashboardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
 
+    // One-time seed of AI models when user first loads dashboard (idempotent)
+    ref.listen(currentUserProvider, (prev, next) {
+      if (prev?.value == null && next.value != null) {
+        Future.microtask(() async {
+          try {
+            await ref
+                .read(firebaseFunctionsProvider)
+                .httpsCallable('seedAiModels')
+                .call();
+          } catch (_) {}
+        });
+      }
+    });
+
     // Reconnect to active match if one exists
     ref.listen<AsyncValue<String?>>(activeMatchCheckProvider, (prev, next) {
       final matchId = next.value;

@@ -43,7 +43,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const admin = __importStar(require("firebase-admin"));
 const characters_1 = require("./characters");
 if (!admin.apps.length) {
-    admin.initializeApp();
+    const projectId = process.env.GCLOUD_PROJECT ?? process.env.GCP_PROJECT ?? "rizzrank-f52cd";
+    admin.initializeApp({ projectId });
 }
 const db = admin.firestore();
 async function seed() {
