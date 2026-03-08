@@ -8,78 +8,66 @@ class AppShell extends StatelessWidget {
 
   final StatefulNavigationShell navigationShell;
 
-  void _onTap(int index, BuildContext context) {
-    if (index == 2) {
-      // The center FAB handles Matchmaking. Don't change nav shell branch.
-      context.go('/matchmaking');
-      return;
-    }
-    
-    // Map bottom nav items to branches:
-    // 0: Home (branch 0)
-    // 1: Rank (branch 1)
-    // 2: Matchmaking (FAB - skipped above)
-    // 3: History (branch 2)
-    // 4: Profile (branch 3)
-    final branchIndex = index > 2 ? index - 1 : index;
+  void _onTap(int index) {
     navigationShell.goBranch(
-      branchIndex,
-      initialLocation: branchIndex == navigationShell.currentIndex,
+      index,
+      initialLocation: index == navigationShell.currentIndex,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Current index calculation mapping branch back to bottom nav index
-    final branchIndex = navigationShell.currentIndex;
-    final currentIndex = branchIndex >= 2 ? branchIndex + 1 : branchIndex;
+    final currentIndex = navigationShell.currentIndex;
 
     return Scaffold(
       body: navigationShell,
-      extendBody: true, // Needed for transparent/floating BottomAppBar
-      bottomNavigationBar: BottomAppBar(
-        color: AppTheme.backgroundDark.withOpacity(0.8),
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _NavBarItem(
-              icon: LucideIcons.home,
-              label: 'HOME',
-              isSelected: currentIndex == 0,
-              onTap: () => _onTap(0, context),
-            ),
-            _NavBarItem(
-              icon: LucideIcons.trophy,
-              label: 'RANK',
-              isSelected: currentIndex == 1,
-              onTap: () => _onTap(1, context),
-            ),
-            const SizedBox(width: 48), // Space for FAB
-            _NavBarItem(
-              icon: LucideIcons.messageSquare,
-              label: 'HISTORY',
-              isSelected: currentIndex == 3,
-              onTap: () => _onTap(3, context),
-            ),
-            _NavBarItem(
-              icon: LucideIcons.user,
-              label: 'PROFILE',
-              isSelected: currentIndex == 4,
-              onTap: () => _onTap(4, context),
-            ),
-          ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.backgroundDark.withOpacity(0.9),
+          border: Border(
+            top: BorderSide(color: AppTheme.primary.withOpacity(0.1)),
+          ),
         ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _onTap(2, context),
-        backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 8,
-        shape: const CircleBorder(),
-        child: const Icon(LucideIcons.plus, size: 32),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _NavBarItem(
+                  icon: LucideIcons.home,
+                  label: 'HOME',
+                  isSelected: currentIndex == 0,
+                  onTap: () => _onTap(0),
+                ),
+                _NavBarItem(
+                  icon: LucideIcons.trophy,
+                  label: 'RANK',
+                  isSelected: currentIndex == 1,
+                  onTap: () => _onTap(1),
+                ),
+                _NavBarItem(
+                  icon: LucideIcons.bot,
+                  label: 'CHALLENGERS',
+                  isSelected: currentIndex == 2,
+                  onTap: () => _onTap(2),
+                ),
+                _NavBarItem(
+                  icon: LucideIcons.history,
+                  label: 'HISTORY',
+                  isSelected: currentIndex == 3,
+                  onTap: () => _onTap(3),
+                ),
+                _NavBarItem(
+                  icon: LucideIcons.user,
+                  label: 'PROFILE',
+                  isSelected: currentIndex == 4,
+                  onTap: () => _onTap(4),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -109,15 +97,15 @@ class _NavBarItem extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color),
+          Icon(icon, color: color, size: 22),
           const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
               color: color,
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
+              letterSpacing: 1,
             ),
           ),
         ],

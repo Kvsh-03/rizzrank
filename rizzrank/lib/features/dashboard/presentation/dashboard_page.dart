@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../core/data/ai_characters.dart';
+import '../../../core/providers/app_state_providers.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -13,6 +14,7 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
+    final selectedId = ref.watch(selectedChallengerIdProvider);
 
     return Scaffold(
       body: userAsync.when(
@@ -45,11 +47,18 @@ class DashboardPage extends ConsumerWidget {
                         child: const Icon(LucideIcons.user, size: 20, color: Colors.white54),
                       ),
                       const SizedBox(width: 12),
-                      const Text('RizzRank', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text('RizzRank',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const Spacer(),
-                      _HeaderIconButton(icon: LucideIcons.bell),
+                      _HeaderIconButton(
+                        icon: LucideIcons.bell,
+                        onTap: () {},
+                      ),
                       const SizedBox(width: 8),
-                      _HeaderIconButton(icon: LucideIcons.settings),
+                      _HeaderIconButton(
+                        icon: LucideIcons.settings,
+                        onTap: () => context.push('/preferences'),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 32),
@@ -58,7 +67,6 @@ class DashboardPage extends ConsumerWidget {
                   Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Background glow
                       Container(
                         width: 140,
                         height: 140,
@@ -136,7 +144,7 @@ class DashboardPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Stats Grid with trends
+                  // Stats Grid
                   Row(
                     children: [
                       Expanded(
@@ -164,30 +172,24 @@ class DashboardPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Find Match Button with shimmer effect
-                  _FindMatchButton(),
-                  const SizedBox(height: 24),
-
-                  // AI Challengers
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'AI Challengers',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white.withOpacity(0.8),
-                            ),
-                      ),
-                      Text(
-                        'View All',
-                        style: TextStyle(
-                          color: AppTheme.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  // Pick your opponent
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Pick your opponent',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Select an AI challenger, then tap Find Match',
+                      style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
@@ -198,30 +200,52 @@ class DashboardPage extends ConsumerWidget {
                       separatorBuilder: (_, __) => const SizedBox(width: 16),
                       itemBuilder: (context, index) {
                         final char = kAICharacters[index];
-                        return Column(
-                          children: [
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: index == 0 ? AppTheme.primary : Colors.transparent,
-                                  width: 2,
-                                ),
-                                image: DecorationImage(
-                                  image: NetworkImage(char.avatarUrl),
-                                  fit: BoxFit.cover,
+                        final isSelected = selectedId == char.id;
+                        return GestureDetector(
+                          onTap: () {
+                            ref.read(selectedChallengerIdProvider.notifier).state =
+                                char.id;
+                          },
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppTheme.primary
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                  image: DecorationImage(
+                                    image: NetworkImage(char.avatarUrl),
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(char.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                char.name,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected
+                                      ? AppTheme.primary
+                                      : Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
                         );
                       },
                     ),
                   ),
+                  const SizedBox(height: 24),
+
+                  // Find Match Button
+                  _FindMatchButton(),
                   const SizedBox(height: 24),
 
                   // Local Leaderboard Preview
@@ -285,18 +309,22 @@ class DashboardPage extends ConsumerWidget {
 }
 
 class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({required this.icon});
+  const _HeaderIconButton({required this.icon, required this.onTap});
   final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppTheme.primary.withOpacity(0.2),
-        shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withOpacity(0.2),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: AppTheme.primary, size: 20),
       ),
-      child: Icon(icon, color: AppTheme.primary, size: 20),
     );
   }
 }
@@ -344,7 +372,10 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               trend!,
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: trendColor ?? Colors.white54),
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: trendColor ?? Colors.white54),
             ),
           ],
         ],
@@ -380,7 +411,8 @@ class _WinRateCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text('$winRate%', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text('$winRate%',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
@@ -462,7 +494,7 @@ class _LeaderboardRow extends StatelessWidget {
       decoration: isActive
           ? BoxDecoration(
               color: AppTheme.primary.withOpacity(0.1),
-              border: Border(
+              border: const Border(
                 left: BorderSide(color: AppTheme.primary, width: 4),
                 right: BorderSide(color: AppTheme.primary, width: 4),
               ),
@@ -486,17 +518,21 @@ class _LeaderboardRow extends StatelessWidget {
           CircleAvatar(
             radius: 20,
             backgroundColor: Colors.grey[800],
-            backgroundImage: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=$avatarSeed'),
+            backgroundImage: NetworkImage(
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=$avatarSeed'),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14)),
                 Text(
                   role.toUpperCase(),
-                  style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.3)),
+                  style: TextStyle(
+                      fontSize: 10, color: Colors.white.withOpacity(0.3)),
                 ),
               ],
             ),

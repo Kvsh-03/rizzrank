@@ -35,7 +35,7 @@ class ProfilePage extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         IconButton(
-                          onPressed: () => context.pop(),
+                          onPressed: () => context.go('/dashboard'),
                           icon: const Icon(LucideIcons.arrowLeft, size: 24),
                         ),
                         Text(
@@ -43,7 +43,7 @@ class ProfilePage extends ConsumerWidget {
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         IconButton(
-                          onPressed: () {},
+                          onPressed: () => context.push('/preferences'),
                           icon: const Icon(LucideIcons.settings, size: 24),
                         ),
                       ],
