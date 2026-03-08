@@ -13,11 +13,9 @@ import '../models/user_model.dart';
 ///
 /// Match creation, archival, and ELO updates are server-only (Cloud Functions).
 class DatabaseService {
-  DatabaseService({
-    FirebaseFirestore? firestore,
-    FirebaseDatabase? database,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _database = database ?? FirebaseDatabase.instance;
+  DatabaseService({FirebaseFirestore? firestore, FirebaseDatabase? database})
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _database = database ?? FirebaseDatabase.instance;
 
   final FirebaseFirestore _firestore;
   final FirebaseDatabase _database;
@@ -74,11 +72,7 @@ class DatabaseService {
   }
 
   Stream<AppUser?> watchUserProfile(String uid) {
-    return _firestore
-        .collection('users')
-        .doc(uid)
-        .snapshots()
-        .map((doc) {
+    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
       if (!doc.exists || doc.data() == null) return null;
       return AppUser.fromFirestore(doc);
     });
@@ -105,10 +99,19 @@ class DatabaseService {
     });
   }
 
-  /// Sets the typing indicator for a player.
-  /// Writes the uid when typing, null when stopped.
-  Future<void> setTypingIndicator(String matchId, String? typingUid) async {
-    await _database.ref('active_states/$matchId/is_typing').set(typingUid);
+  /// Sets the typing indicator for a specific player.
+  /// Writes true when typing, removes the key when stopped.
+  Future<void> setTypingIndicator(
+    String matchId,
+    String uid,
+    bool isTyping,
+  ) async {
+    final ref = _database.ref('active_states/$matchId/is_typing/$uid');
+    if (isTyping) {
+      await ref.set(true);
+    } else {
+      await ref.remove();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -120,10 +123,7 @@ class DatabaseService {
   /// Call once after authentication.
   Future<void> setupPresence(String uid) async {
     final ref = _database.ref('presence/$uid');
-    await ref.set({
-      'is_online': true,
-      'last_seen': ServerValue.timestamp,
-    });
+    await ref.set({'is_online': true, 'last_seen': ServerValue.timestamp});
     await ref.onDisconnect().set({
       'is_online': false,
       'last_seen': ServerValue.timestamp,
@@ -152,7 +152,10 @@ class DatabaseService {
   // Firestore: Matches (history) -- read-only on client
   // ---------------------------------------------------------------------------
 
-  Future<List<FirestoreMatch>> getMatchHistory(String uid, {int limit = 20}) async {
+  Future<List<FirestoreMatch>> getMatchHistory(
+    String uid, {
+    int limit = 20,
+  }) async {
     final query = await _firestore
         .collection('matches')
         .where('player_ids', arrayContains: uid)
@@ -170,7 +173,9 @@ class DatabaseService {
         .orderBy('created_at', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => FirestoreMatch.fromFirestore(d)).toList());
+        .map(
+          (snap) =>
+              snap.docs.map((d) => FirestoreMatch.fromFirestore(d)).toList(),
+        );
   }
 }

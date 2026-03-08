@@ -9,7 +9,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getCharacter } from "./characters";
 
-const CHAT_MODEL = "gemini-2.0-flash";
+const CHAT_MODEL = "gemini-1.5-flash";
 export const WIN_THRESHOLD = 100;
 
 const WIN_INSTRUCTION =
@@ -70,11 +70,13 @@ export async function getAIResponse(
   characterId: string,
   history: ChatMessage[],
   currentVibe: number,
-  aiTraits: Record<string, string> = {}
+  aiTraits: Record<string, string> = {},
+  systemInstructionOverride?: string
 ): Promise<{ text: string; isDateAsk: boolean }> {
   const character = getCharacter(characterId);
 
-  let systemContent = character.systemInstruction + buildTraitPrompt(aiTraits);
+  const baseInstruction = systemInstructionOverride || character.systemInstruction;
+  let systemContent = baseInstruction + buildTraitPrompt(aiTraits);
   if (currentVibe > WIN_THRESHOLD) {
     systemContent += WIN_INSTRUCTION;
   }

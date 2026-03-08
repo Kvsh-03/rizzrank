@@ -60,20 +60,21 @@ service cloud.firestore {
     match /matches/{matchId} {
       allow read: if isSignedIn()
         && request.auth.uid in resource.data.get('player_ids', []);
-      allow create, update, delete: if false;
+      allow create: if false;
+      allow update, delete: if false;
 
       // ───────────────────────────────────────────────────────────────────────
-      // Chat subcollection: matches/{matchId}/chat/{messageId}
-      //   - Players in the match can READ all messages.
-      //   - Players can CREATE messages only as themselves.
+      // Private player message shards: matches/{matchId}/players/{playerId}/messages/{messageId}
+      //   - A player can only READ and CREATE messages in their own shard.
+      //   - sender_uid must match the authenticated user's UID.
       //   - Required fields: sender_uid, role, content, timestamp.
-      //   - No updates or deletes.
+      //   - No updates or deletes (server-only via Admin SDK).
       // ───────────────────────────────────────────────────────────────────────
-      match /chat/{messageId} {
+      match /players/{playerId}/messages/{messageId} {
         allow read: if isSignedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.get('player_ids', []);
+          && request.auth.uid == playerId;
         allow create: if isSignedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.get('player_ids', [])
+          && request.auth.uid == playerId
           && request.resource.data.sender_uid == request.auth.uid
           && request.resource.data.keys().hasAll(['sender_uid', 'role', 'content', 'timestamp']);
         allow update, delete: if false;

@@ -48,6 +48,9 @@ exports.leaveQueue = exports.findMatch = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const traitData_1 = require("./traitData");
+const characters_1 = require("./characters");
+const firestore_1 = require("firebase-admin/firestore");
+const database_1 = require("firebase-admin/database");
 const ELO_RANGE = 150;
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MATCH_DURATION_MS = 10 * 60 * 1000; // 10 minutes
@@ -87,14 +90,15 @@ exports.findMatch = (0, https_1.onCall)(async (request) => {
             }
         }
         if (!opponentDoc) {
-            // No opponent: enqueue self
-            const queueRef = db.collection("matchmaking").doc(uid);
-            transaction.set(queueRef, {
-                uid,
+            // FIX 1: Restore the Queue Logic instead of instant solo matching.
+            // Put the user into the matchmaking queue so the next person can find them.
+            const expireAt = Date.now() + QUEUE_TTL_MS;
+            transaction.set(db.collection("matchmaking").doc(uid), {
+                uid: uid,
                 display_name: myDisplayName,
                 elo_rating: myElo,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                expire_at: Date.now() + QUEUE_TTL_MS,
+                timestamp: firestore_1.FieldValue.serverTimestamp(),
+                expire_at: expireAt,
             });
             return { matched: false };
         }
@@ -117,8 +121,8 @@ exports.findMatch = (0, https_1.onCall)(async (request) => {
             elo_change: {},
             player_elo_before: { [uid]: myElo, [opponentUid]: opponentElo },
             is_game_over: false,
-            expires_at: admin.firestore.Timestamp.fromMillis(expiresAtMs),
-            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            expires_at: firestore_1.Timestamp.fromMillis(expiresAtMs),
+            created_at: firestore_1.FieldValue.serverTimestamp(),
         });
         // Set active_match_id on both players
         transaction.update(db.doc(`users/${uid}`), { active_match_id: matchId });
@@ -147,8 +151,19 @@ exports.findMatch = (0, https_1.onCall)(async (request) => {
             is_typing: null,
             winner_uid: null,
             expires_at: result.expiresAtMs,
-            created_at: admin.database.ServerValue.TIMESTAMP,
+            created_at: database_1.ServerValue.TIMESTAMP,
         });
+        // FIX 2: Write initial AI greeting to the NEW private player shards
+        const openingLine = (0, characters_1.getOpeningLine)(result.aiCharacterId);
+        for (const playerId of result.playerIds) {
+            await db.collection(`matches/${result.matchId}/players/${playerId}/messages`).add({
+                role: "model",
+                content: openingLine,
+                sender_uid: `ai_${result.aiCharacterId}`,
+                timestamp: firestore_1.FieldValue.serverTimestamp(),
+                rizz_delta: null,
+            });
+        }
         return { matched: true, matchId: result.matchId };
     }
     return { matched: false };

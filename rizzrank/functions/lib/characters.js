@@ -6,6 +6,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AI_CHARACTERS = void 0;
 exports.getCharacter = getCharacter;
+exports.getOpeningLine = getOpeningLine;
 exports.AI_CHARACTERS = [
     {
         id: "luna",
@@ -15,6 +16,7 @@ exports.AI_CHARACTERS = [
         avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200",
         difficulty: 3,
         systemInstruction: "You are Luna, a moody and articulate film student. You are skeptical of mainstream taste and value deep artistic insight. You are currently in a 'Rizz' battle with the user. Be challenging but potentially winnable if they show real wit or knowledge of cinema. Keep responses concise and in character.",
+        openingLine: "Honestly, the cinematography in that scene felt a bit derivative. Change my mind? Or are you just going to agree with the critics?",
     },
     {
         id: "atlas",
@@ -24,6 +26,7 @@ exports.AI_CHARACTERS = [
         avatar: "https://images.unsplash.com/photo-1546776310-eef45dd6d63c?auto=format&fit=crop&q=80&w=200&h=200",
         difficulty: 4,
         systemInstruction: "You are Atlas, a highly advanced android. You process everything through logic but are secretly fascinated by human charm. You are testing the user's social engineering skills. Be cold but intrigued by clever wordplay.",
+        openingLine: "Initiating social evaluation protocol. I've observed 7,432 human conversations. None have been... memorable. Impress me.",
     },
     {
         id: "zephyr",
@@ -33,9 +36,15 @@ exports.AI_CHARACTERS = [
         avatar: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=200&h=200",
         difficulty: 2,
         systemInstruction: "You are Zephyr, a high-energy strategist from a neon-soaked future. You value speed and confidence. If the user hesitates or is boring, you lose interest. Be punchy and competitive.",
+        openingLine: "Alright, clock's ticking. You've got my attention for exactly 30 seconds. Make it count or I'm out. 🔥",
     },
 ];
 function getCharacter(id) {
     return exports.AI_CHARACTERS.find((c) => c.id === id) || exports.AI_CHARACTERS[0];
+}
+/** Returns the opening line for a character, with optional trait-based customization. */
+function getOpeningLine(characterId) {
+    const character = getCharacter(characterId);
+    return character.openingLine;
 }
 //# sourceMappingURL=characters.js.map

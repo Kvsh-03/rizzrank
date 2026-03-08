@@ -47,12 +47,12 @@ class _BattlePageState extends ConsumerState<BattlePage> {
     _typingDebounce?.cancel();
 
     if (text.isNotEmpty) {
-      dbService.setTypingIndicator(widget.matchId, user.uid);
+      dbService.setTypingIndicator(widget.matchId, user.uid, true);
       _typingDebounce = Timer(const Duration(seconds: 2), () {
-        dbService.setTypingIndicator(widget.matchId, null);
+        dbService.setTypingIndicator(widget.matchId, user.uid, false);
       });
     } else {
-      dbService.setTypingIndicator(widget.matchId, null);
+      dbService.setTypingIndicator(widget.matchId, user.uid, false);
     }
   }
 
@@ -66,22 +66,27 @@ class _BattlePageState extends ConsumerState<BattlePage> {
     });
 
     // Clear typing indicator
-    ref.read(databaseServiceProvider).setTypingIndicator(widget.matchId, null);
+    ref
+        .read(databaseServiceProvider)
+        .setTypingIndicator(widget.matchId, uid, false);
     _typingDebounce?.cancel();
 
     try {
       final firestore = ref.read(firestoreProvider);
-      await firestore.collection('matches/${widget.matchId}/chat').add({
-        'role': 'user',
-        'content': text,
-        'sender_uid': uid,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      await firestore
+          .collection('matches/${widget.matchId}/players/$uid/messages')
+          .add({
+            'role': 'user',
+            'content': text,
+            'sender_uid': uid,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -100,13 +105,13 @@ class _BattlePageState extends ConsumerState<BattlePage> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).value;
     if (user == null) {
-      return const Scaffold(
-          body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final liveMatchAsync = ref.watch(liveMatchStreamProvider(widget.matchId));
     final messagesAsync = ref.watch(
-        messagesStreamProvider((matchId: widget.matchId, uid: user.uid)));
+      messagesStreamProvider((matchId: widget.matchId, uid: user.uid)),
+    );
 
     // Navigate to results when match completes
     ref.listen(liveMatchStreamProvider(widget.matchId), (prev, next) {
@@ -120,16 +125,17 @@ class _BattlePageState extends ConsumerState<BattlePage> {
     return liveMatchAsync.when(
       data: (liveMatch) {
         if (liveMatch == null) {
-          return const Scaffold(
-              body: Center(child: Text('Match not found')));
+          return const Scaffold(body: Center(child: Text('Match not found')));
         }
 
         final aiChar = getCharacterById(liveMatch.aiCharacterId);
         final myVibe = liveMatch.vibeFor(user.uid);
         final opponentUid = liveMatch.getOpponentUid(user.uid);
-        final opponentVibe =
-            opponentUid != null ? liveMatch.vibeFor(opponentUid) : 0;
-        final isTypingUid = liveMatch.isTyping;
+        final opponentVibe = opponentUid != null
+            ? liveMatch.vibeFor(opponentUid)
+            : 0;
+        final opponentIsTyping =
+            opponentUid != null && (liveMatch.isTyping[opponentUid] == true);
 
         return Scaffold(
           backgroundColor: AppTheme.backgroundDark,
@@ -140,43 +146,57 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: AppTheme.primary.withOpacity(0.1),
-                  border:
-                      Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                  border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
                 ),
-                child: const Icon(LucideIcons.menu,
-                    color: AppTheme.primary, size: 20),
+                child: const Icon(
+                  LucideIcons.menu,
+                  color: AppTheme.primary,
+                  size: 20,
+                ),
               ),
             ),
-            title: const Text('RizzRank',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+            title: const Text(
+              'RizzRank',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
+            ),
             actions: [
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: InkWell(
                   onTap: () => context.go('/dashboard'),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       color: Colors.greenAccent.withOpacity(0.2),
                       border: Border.all(
-                          color: Colors.greenAccent.withOpacity(0.4)),
+                        color: Colors.greenAccent.withOpacity(0.4),
+                      ),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('FINISH',
-                            style: TextStyle(
-                                color: Colors.greenAccent,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold)),
+                        Text(
+                          'FINISH',
+                          style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         SizedBox(width: 4),
-                        Icon(LucideIcons.trophy,
-                            color: Colors.greenAccent, size: 16),
+                        Icon(
+                          LucideIcons.trophy,
+                          color: Colors.greenAccent,
+                          size: 16,
+                        ),
                       ],
                     ),
                   ),
@@ -196,7 +216,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                     end: Alignment.bottomCenter,
                     colors: [
                       AppTheme.primary.withOpacity(0.1),
-                      Colors.transparent
+                      Colors.transparent,
                     ],
                   ),
                 ),
@@ -227,8 +247,9 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: AppTheme.primary.withOpacity(0.5),
-                                  width: 2),
+                                color: AppTheme.primary.withOpacity(0.5),
+                                width: 2,
+                              ),
                             ),
                             child: ClipOval(
                               child: Image.network(
@@ -236,8 +257,11 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Container(
                                   color: Colors.grey[800],
-                                  child: const Icon(LucideIcons.user,
-                                      color: Colors.white54, size: 40),
+                                  child: const Icon(
+                                    LucideIcons.user,
+                                    color: Colors.white54,
+                                    size: 40,
+                                  ),
                                 ),
                               ),
                             ),
@@ -253,21 +277,29 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                               color: Colors.greenAccent,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: AppTheme.backgroundDark, width: 3),
+                                color: AppTheme.backgroundDark,
+                                width: 3,
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(aiChar.name,
-                        style: const TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(
+                      aiChar.name,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${aiChar.role} \u2022 "${aiChar.description.split('.').first}"',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.5), fontSize: 13),
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 13,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
@@ -275,10 +307,14 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _PersonalityTag(
-                            label: 'Cinephile', color: AppTheme.primary),
+                          label: 'Cinephile',
+                          color: AppTheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         _PersonalityTag(
-                            label: 'Night Owl', color: Colors.pinkAccent),
+                          label: 'Night Owl',
+                          color: Colors.pinkAccent,
+                        ),
                       ],
                     ),
                   ],
@@ -325,24 +361,31 @@ class _BattlePageState extends ConsumerState<BattlePage> {
               ),
 
               // Typing indicator
-              if (isTypingUid != null && isTypingUid != user.uid)
+              if (opponentIsTyping)
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
                       const SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white38),
+                          strokeWidth: 2,
+                          color: Colors.white38,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      Text('Opponent is typing...',
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.4),
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic)),
+                      Text(
+                        'Opponent is typing...',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -353,8 +396,8 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                 decoration: BoxDecoration(
                   color: AppTheme.backgroundDark.withOpacity(0.95),
                   border: Border(
-                      top: BorderSide(
-                          color: AppTheme.primary.withOpacity(0.2))),
+                    top: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
+                  ),
                 ),
                 child: SafeArea(
                   child: Row(
@@ -369,29 +412,36 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                               decoration: InputDecoration(
                                 hintText: 'Type your smooth response...',
                                 hintStyle: TextStyle(
-                                    color: Colors.white.withOpacity(0.3)),
+                                  color: Colors.white.withOpacity(0.3),
+                                ),
                                 filled: true,
                                 fillColor:
                                     Colors.grey[850]?.withOpacity(0.5) ??
-                                        Colors.white.withOpacity(0.08),
+                                    Colors.white.withOpacity(0.08),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
                                   borderSide: BorderSide(
-                                      color:
-                                          AppTheme.primary.withOpacity(0.3)),
+                                    color: AppTheme.primary.withOpacity(0.3),
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
                                   borderSide: BorderSide(
-                                      color:
-                                          AppTheme.primary.withOpacity(0.5),
-                                      width: 2),
+                                    color: AppTheme.primary.withOpacity(0.5),
+                                    width: 2,
+                                  ),
                                 ),
                                 contentPadding: const EdgeInsets.fromLTRB(
-                                    20, 14, 48, 14),
+                                  20,
+                                  14,
+                                  48,
+                                  14,
+                                ),
                               ),
                               style: const TextStyle(
-                                  color: Colors.white, fontSize: 14),
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
                               onSubmitted: (_) => _sendMessage(user.uid),
                             ),
                             Positioned(
@@ -409,11 +459,15 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                                       ? const Padding(
                                           padding: EdgeInsets.all(8),
                                           child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white),
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
                                         )
-                                      : const Icon(LucideIcons.send,
-                                          color: Colors.white, size: 18),
+                                      : const Icon(
+                                          LucideIcons.send,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
                                 ),
                               ),
                             ),
@@ -428,10 +482,14 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                           shape: BoxShape.circle,
                           color: AppTheme.primary.withOpacity(0.1),
                           border: Border.all(
-                              color: AppTheme.primary.withOpacity(0.3)),
+                            color: AppTheme.primary.withOpacity(0.3),
+                          ),
                         ),
-                        child: const Icon(LucideIcons.wand2,
-                            color: AppTheme.primary, size: 20),
+                        child: const Icon(
+                          LucideIcons.wand2,
+                          color: AppTheme.primary,
+                          size: 20,
+                        ),
                       ),
                     ],
                   ),
@@ -443,8 +501,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
       },
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) =>
-          Scaffold(body: Center(child: Text('Match Error: $e'))),
+      error: (e, _) => Scaffold(body: Center(child: Text('Match Error: $e'))),
     );
   }
 }

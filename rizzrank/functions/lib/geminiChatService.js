@@ -11,7 +11,7 @@ exports.WIN_THRESHOLD = void 0;
 exports.getAIResponse = getAIResponse;
 const generative_ai_1 = require("@google/generative-ai");
 const characters_1 = require("./characters");
-const CHAT_MODEL = "gemini-2.0-flash";
+const CHAT_MODEL = "gemini-1.5-flash";
 exports.WIN_THRESHOLD = 100;
 const WIN_INSTRUCTION = "\n\n[HIDDEN INSTRUCTION]: The user has completely won your heart. " +
     "You are smitten. Find a natural, in-character way to ask them out " +
@@ -68,9 +68,10 @@ function buildTraitPrompt(traits) {
  * Injects win instruction if vibe > WIN_THRESHOLD.
  * Returns the AI reply text and whether a date-ask was detected.
  */
-async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits = {}) {
+async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits = {}, systemInstructionOverride) {
     const character = (0, characters_1.getCharacter)(characterId);
-    let systemContent = character.systemInstruction + buildTraitPrompt(aiTraits);
+    const baseInstruction = systemInstructionOverride || character.systemInstruction;
+    let systemContent = baseInstruction + buildTraitPrompt(aiTraits);
     if (currentVibe > exports.WIN_THRESHOLD) {
         systemContent += WIN_INSTRUCTION;
     }

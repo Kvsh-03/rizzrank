@@ -3,7 +3,7 @@
  * RizzRank Date Race - Cloud Functions
  *
  * Exports:
- *   - onUserMessageSent: Firestore trigger on matches/{matchId}/chat/{messageId}
+ *   - onUserMessageSent: Firestore trigger on matches/{matchId}/players/{playerId}/messages/{messageId}
  *   - findMatch, leaveQueue: HTTPS callables for matchmaking
  *   - cleanupExpiredMatchmaking: Scheduled cleanup
  *   - checkMatchTimeouts: Scheduled match timeout enforcement
@@ -89,7 +89,7 @@ async function loadCharacter(characterId) {
 // Fires when any new message is added to the chat subcollection.
 // Only processes messages where role === "user".
 // ─────────────────────────────────────────────────────────────────────────────
-exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId}/chat/{messageId}", async (event) => {
+exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId}/players/{playerId}/messages/{messageId}", async (event) => {
     const snap = event.data;
     if (!snap)
         return;
@@ -97,11 +97,12 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     if (!data || data.role !== "user")
         return;
     const matchId = event.params.matchId;
+    const playerId = event.params.playerId;
     const messageId = event.params.messageId;
-    const senderUid = data.sender_uid || "";
+    const senderUid = data.sender_uid || playerId;
     const userText = data.content || data.text || "";
-    if (!senderUid || !userText) {
-        console.warn(`Missing sender_uid or content on ${matchId}/chat/${messageId}`);
+    if (!userText) {
+        console.warn(`Missing content on ${matchId}/players/${playerId}/messages/${messageId}`);
         return;
     }
     // ── Read match metadata ──────────────────────────────────────────────
@@ -118,31 +119,24 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     const characterId = matchData.ai_character_id || "luna";
     const playerIds = matchData.player_ids || [];
     const aiTraits = matchData.ai_traits ?? {};
-    const playerIndex = playerIds.indexOf(senderUid);
+    const playerIndex = playerIds.indexOf(playerId);
     if (playerIndex === -1) {
-        console.error(`Sender ${senderUid} not in match ${matchId} players`);
+        console.error(`Player ${playerId} not in match ${matchId} players`);
         return;
     }
     const vibeKey = playerIndex === 0 ? "p1_vibe" : "p2_vibe";
     // ── Load AI character config ─────────────────────────────────────────
-    await loadCharacter(characterId);
+    const charConfig = await loadCharacter(characterId);
     // ── Read current vibe from RTDB ──────────────────────────────────────
     const vibeRef = rtdb.ref(`active_states/${matchId}/${vibeKey}`);
     const vibeSnap = await vibeRef.get();
     const currentVibe = vibeSnap.val() ?? 0;
-    // ── Build chat history from Firestore (this player's conversation) ───
+    // ── Build chat history from player's private shard ──────────────────
     const chatSnap = await db
-        .collection(`matches/${matchId}/chat`)
-        .where("sender_uid", "==", senderUid)
+        .collection(`matches/${matchId}/players/${playerId}/messages`)
         .orderBy("timestamp", "asc")
         .get();
-    const aiRepliesSnap = await db
-        .collection(`matches/${matchId}/chat`)
-        .where("target_uid", "==", senderUid)
-        .where("role", "==", "model")
-        .orderBy("timestamp", "asc")
-        .get();
-    const allDocs = [...chatSnap.docs, ...aiRepliesSnap.docs]
+    const allDocs = chatSnap.docs
         .map((d) => {
         const dd = d.data();
         return {
@@ -166,18 +160,17 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
         ? (userMsgTimestamp - lastAITimestamp) / 1000
         : 4.0; // Default to sweet spot for the first message
     // ── Get AI response via Gemini ───────────────────────────────────────
-    const aiResult = await (0, geminiChatService_1.getAIResponse)(geminiKey.value(), characterId, history, currentVibe, aiTraits);
+    const aiResult = await (0, geminiChatService_1.getAIResponse)(geminiKey.value(), characterId, history, currentVibe, aiTraits, charConfig.systemInstruction);
     // ── Score the user message via Gemini Judge ──────────────────────────
     const scoringResult = await (0, geminiJudge_1.scoreMessage)(geminiKey.value(), characterId, lastAIMsg, userText, aiTraits);
     // ── Apply Turn Score formula ─────────────────────────────────────────
     const timingMult = (0, geminiJudge_1.getTimingMult)(responseTimeSec);
     const turnResult = (0, geminiJudge_1.computeTurnScore)(scoringResult, timingMult);
-    // ── Write AI reply to Firestore chat subcollection ───────────────────
-    await db.collection(`matches/${matchId}/chat`).add({
+    // ── Write AI reply to player's private shard ─────────────────────────
+    await db.collection(`matches/${matchId}/players/${playerId}/messages`).add({
         role: "model",
         content: aiResult.text,
         sender_uid: `ai_${characterId}`,
-        target_uid: senderUid,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         rizz_delta: null,
     });
@@ -197,15 +190,15 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
             reasoning: turnResult.reasoning,
         },
     });
-    console.log(`[${matchId}] ${senderUid} (${vibeKey}): ` +
+    console.log(`[${matchId}] ${playerId} (${vibeKey}): ` +
         `+${turnResult.turnScore} rizz (good=${turnResult.baseGood} ×persona=${turnResult.personaMult} ` +
         `×timing=${turnResult.timingMult} −bad=${turnResult.baseBad}) ` +
         `→ ${updatedVibe} total` +
         (aiResult.isDateAsk ? " ★ DATE ASK DETECTED" : ""));
     // ── Win detection: if AI asked for a date, finalize the match ────────
     if (aiResult.isDateAsk && updatedVibe > geminiChatService_1.WIN_THRESHOLD) {
-        console.log(`[${matchId}] WINNER: ${senderUid}`);
-        await (0, finalizeMatch_1.finalizeMatch)({ matchId, winnerUid: senderUid, playerIds });
+        console.log(`[${matchId}] WINNER: ${playerId}`);
+        await (0, finalizeMatch_1.finalizeMatch)({ matchId, winnerUid: playerId, playerIds });
     }
 });
 // ─────────────────────────────────────────────────────────────────────────────

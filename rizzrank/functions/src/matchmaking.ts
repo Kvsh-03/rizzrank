@@ -13,6 +13,10 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { pickRandomTraits } from "./traitData";
+import { getOpeningLine } from "./characters";
+import { Timestamp, FieldValue } from "firebase-admin/firestore";
+import { ServerValue } from "firebase-admin/database";
+
 
 const ELO_RANGE = 150;
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -63,15 +67,17 @@ export const findMatch = onCall(async (request) => {
     }
 
     if (!opponentDoc) {
-      // No opponent: enqueue self
-      const queueRef = db.collection("matchmaking").doc(uid);
-      transaction.set(queueRef, {
-        uid,
+      // FIX 1: Restore the Queue Logic instead of instant solo matching.
+      // Put the user into the matchmaking queue so the next person can find them.
+      const expireAt = Date.now() + QUEUE_TTL_MS;
+      transaction.set(db.collection("matchmaking").doc(uid), {
+        uid: uid,
         display_name: myDisplayName,
         elo_rating: myElo,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        expire_at: Date.now() + QUEUE_TTL_MS,
+        timestamp: FieldValue.serverTimestamp(),
+        expire_at: expireAt,
       });
+
       return { matched: false as const };
     }
 
@@ -96,8 +102,8 @@ export const findMatch = onCall(async (request) => {
       elo_change: {},
       player_elo_before: { [uid]: myElo, [opponentUid]: opponentElo },
       is_game_over: false,
-      expires_at: admin.firestore.Timestamp.fromMillis(expiresAtMs),
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      expires_at: Timestamp.fromMillis(expiresAtMs),
+      created_at: FieldValue.serverTimestamp(),
     });
 
     // Set active_match_id on both players
@@ -130,8 +136,21 @@ export const findMatch = onCall(async (request) => {
       is_typing: null,
       winner_uid: null,
       expires_at: result.expiresAtMs,
-      created_at: admin.database.ServerValue.TIMESTAMP,
+      created_at: ServerValue.TIMESTAMP,
     });
+
+    // FIX 2: Write initial AI greeting to the NEW private player shards
+    const openingLine = getOpeningLine(result.aiCharacterId);
+
+    for (const playerId of result.playerIds) {
+      await db.collection(`matches/${result.matchId}/players/${playerId}/messages`).add({
+        role: "model",
+        content: openingLine,
+        sender_uid: `ai_${result.aiCharacterId}`,
+        timestamp: FieldValue.serverTimestamp(),
+        rizz_delta: null,
+      });
+    }
 
     return { matched: true, matchId: result.matchId };
   }
