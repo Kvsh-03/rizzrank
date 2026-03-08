@@ -47,6 +47,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.leaveQueue = exports.findMatch = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
+const traitData_1 = require("./traitData");
 const ELO_RANGE = 150;
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MATCH_DURATION_MS = 10 * 60 * 1000; // 10 minutes
@@ -112,7 +113,7 @@ exports.findMatch = (0, https_1.onCall)(async (request) => {
             status: "active",
             target_phrase: "",
             ai_character_id: aiCharacterId,
-            ai_traits: [],
+            ai_traits: (0, traitData_1.pickRandomTraits)(),
             elo_change: {},
             player_elo_before: { [uid]: myElo, [opponentUid]: opponentElo },
             is_game_over: false,

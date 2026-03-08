@@ -1,15 +1,15 @@
 /**
- * OpenRouter Chat Service - calls Llama 3.1 70B for AI dialogue.
+ * Gemini Chat Service - uses gemini-2.0-flash for AI dialogue.
  *
- * If the player's vibe score exceeds WIN_THRESHOLD, a hidden instruction
- * is injected to make the AI ask the user on a date.
- * After receiving the response, date-ask detection runs to finalize the match.
+ * Replaces the OpenRouter service. If the player's vibe score exceeds
+ * WIN_THRESHOLD, a hidden instruction is injected to make the AI ask
+ * the user on a date. Date-ask detection runs on the response.
  */
 
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getCharacter } from "./characters";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "meta-llama/llama-3.1-70b-instruct";
+const CHAT_MODEL = "gemini-2.0-flash";
 export const WIN_THRESHOLD = 100;
 
 const WIN_INSTRUCTION =
@@ -40,13 +40,6 @@ export interface ChatMessage {
   text: string;
 }
 
-interface OpenRouterResponse {
-  choices?: Array<{
-    message?: { content?: string };
-  }>;
-  error?: { message?: string };
-}
-
 function buildTraitPrompt(traits: Record<string, string>): string {
   if (!traits || Object.keys(traits).length === 0) return "";
 
@@ -68,7 +61,7 @@ function buildTraitPrompt(traits: Record<string, string>): string {
 }
 
 /**
- * Calls OpenRouter Llama 3.1 70B with conversation history.
+ * Calls Gemini 2.0 Flash with conversation history.
  * Injects win instruction if vibe > WIN_THRESHOLD.
  * Returns the AI reply text and whether a date-ask was detected.
  */
@@ -86,38 +79,28 @@ export async function getAIResponse(
     systemContent += WIN_INSTRUCTION;
   }
 
-  const messages = [
-    { role: "system" as const, content: systemContent },
-    ...history.map((m) => ({
-      role: m.role === "model" ? ("assistant" as const) : (m.role as "user" | "system"),
-      content: m.text,
-    })),
-  ];
-
-  const res = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://rizzrank.app",
-      "X-Title": "RizzRank Date Race",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: CHAT_MODEL,
+    systemInstruction: systemContent,
+    generationConfig: {
       temperature: 0.9,
-      max_tokens: 300,
-    }),
+      maxOutputTokens: 300,
+    },
   });
 
-  if (!res.ok) {
-    const errBody = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${errBody}`);
-  }
+  const geminiHistory = history.slice(0, -1).map((m) => ({
+    role: m.role === "user" ? ("user" as const) : ("model" as const),
+    parts: [{ text: m.text }],
+  }));
 
-  const data = (await res.json()) as OpenRouterResponse;
-  const text =
-    data.choices?.[0]?.message?.content?.trim() ||
+  const lastMessage = history.length > 0
+    ? history[history.length - 1].text
+    : "";
+
+  const chat = model.startChat({ history: geminiHistory });
+  const result = await chat.sendMessage(lastMessage);
+  const text = result.response.text().trim() ||
     "[AI could not generate a response]";
 
   const isDateAsk =

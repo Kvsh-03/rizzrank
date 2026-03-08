@@ -186,14 +186,14 @@ void main() {
         'winner_id': 'p1',
         'status': 'completed',
         'target_phrase': 'coffee date',
-        'ai_traits': ['witty', 'flirty'],
+        'ai_traits': {'personality_traits': 'Witty', 'moods': 'Happy'},
         'elo_change': {'p1': 25, 'p2': -12},
       });
       expect(match.matchId, 'm1');
       expect(match.playerIds, ['p1', 'p2']);
       expect(match.winnerId, 'p1');
       expect(match.status, 'completed');
-      expect(match.aiTraits, ['witty', 'flirty']);
+      expect(match.aiTraits, {'personality_traits': 'Witty', 'moods': 'Happy'});
       expect(match.eloChange, {'p1': 25, 'p2': -12});
     });
 
@@ -203,12 +203,12 @@ void main() {
         'winner_id': 'p1',
         'status': 'completed',
         'target_phrase': 'date',
-        'ai_traits': ['smart'],
+        'ai_traits': {'careers': 'Chef'},
         'elo_change': {'p1': 20, 'p2': -10},
       });
       final map = match.toFirestore();
       expect(map['status'], 'completed');
-      expect(map['ai_traits'], ['smart']);
+      expect(map['ai_traits'], {'careers': 'Chef'});
       expect(map['elo_change'], {'p1': 20, 'p2': -10});
     });
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,14 +19,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _isLoading = false;
 
   Future<void> _handleLogin() async {
-    if (_nameController.text.trim().isEmpty) return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
 
+    debugPrint('[LoginPage] _handleLogin called with name="$name"');
     setState(() => _isLoading = true);
     try {
       final authService = ref.read(authServiceProvider);
-      await authService.signInAnonymously(_nameController.text.trim());
+      await authService.signInAnonymously(name);
+      debugPrint('[LoginPage] Sign-in succeeded, navigating to /dashboard');
       if (mounted) context.go('/dashboard');
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[LoginPage] Login failed: $e\n$stack');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Login failed: $e')),

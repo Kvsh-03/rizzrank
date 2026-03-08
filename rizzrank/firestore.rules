@@ -41,6 +41,16 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Traits: read-only reference data for AI persona generation
+    //   - Any signed-in user can read trait categories.
+    //   - All writes are server-only (Admin SDK seeding).
+    // ─────────────────────────────────────────────────────────────────────────
+    match /traits/{category} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Matches: game results & archive
     //   - Players can only READ matches they are part of.
     //   - ALL writes (create/update/delete) are server-only.

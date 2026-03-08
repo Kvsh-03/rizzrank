@@ -92,12 +92,12 @@ void main() {
       'winner_id': 'p1',
       'status': 'completed',
       'target_phrase': 'date',
-      'ai_traits': ['witty'],
+      'ai_traits': {'personality_traits': 'Witty'},
       'elo_change': {'p1': 25, 'p2': -12},
     });
     final map = match.toFirestore();
     if (map['status'] != 'completed') throw StateError('toFirestore mismatch');
-    if (match.aiTraits.first != 'witty') throw StateError('aiTraits mismatch');
+    if (match.aiTraits['personality_traits'] != 'Witty') throw StateError('aiTraits mismatch');
     if (match.eloChange['p1'] != 25) throw StateError('eloChange mismatch');
     final copy = match.copyWith(status: 'active');
     if (copy.status != 'active') throw StateError('copyWith mismatch');

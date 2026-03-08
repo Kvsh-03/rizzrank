@@ -6,14 +6,17 @@
  *   - onUserMessageSent: Firestore trigger on matches/{matchId}/chat/{messageId}
  *   - findMatch, leaveQueue: HTTPS callables for matchmaking
  *   - cleanupExpiredMatchmaking: Scheduled cleanup
- *   - checkMatchTimeouts: Scheduled match timeout enforcement (every 30s)
+ *   - checkMatchTimeouts: Scheduled match timeout enforcement
  *
  * Pipeline (onUserMessageSent):
  *   1. Read AI character from Firestore ai_models collection (fallback to hardcoded)
- *   2. OpenRouter (Llama 3.1 70B) generates AI reply
- *   3. Gemini Flash-Lite judges the user message (0-15 rizz score)
+ *   2. Gemini 2.0 Flash generates AI reply
+ *   3. Gemini Flash-Lite judges the user message (Turn Score formula)
  *   4. RTDB active_states/{matchId}/p1_vibe or p2_vibe is updated
  *   5. If vibe > 100 and date-ask detected: finalizeMatch is called
+ *
+ * Scoring formula:
+ *   Turn Score = [(Base Good x Persona Mult) x Timing Mult] - Base Bad
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -54,14 +57,13 @@ const admin = __importStar(require("firebase-admin"));
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const params_1 = require("firebase-functions/params");
-const openRouterService_1 = require("./openRouterService");
+const geminiChatService_1 = require("./geminiChatService");
 const geminiJudge_1 = require("./geminiJudge");
 const characters_1 = require("./characters");
 const finalizeMatch_1 = require("./finalizeMatch");
 admin.initializeApp();
 const db = admin.firestore();
 const rtdb = admin.database();
-const openrouterKey = (0, params_1.defineString)("OPENROUTER_API_KEY");
 const geminiKey = (0, params_1.defineString)("GEMINI_API_KEY");
 // Re-export matchmaking callables
 var matchmaking_1 = require("./matchmaking");
@@ -76,7 +78,6 @@ async function loadCharacter(characterId) {
             description: data.personality_summary ?? "",
         };
     }
-    // Fallback to hardcoded characters.ts
     const fallback = (0, characters_1.getCharacter)(characterId);
     return {
         systemInstruction: fallback.systemInstruction,
@@ -98,7 +99,6 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     const matchId = event.params.matchId;
     const messageId = event.params.messageId;
     const senderUid = data.sender_uid || "";
-    // Support both "content" (new) and "text" (legacy) field names
     const userText = data.content || data.text || "";
     if (!senderUid || !userText) {
         console.warn(`Missing sender_uid or content on ${matchId}/chat/${messageId}`);
@@ -117,7 +117,6 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     }
     const characterId = matchData.ai_character_id || "luna";
     const playerIds = matchData.player_ids || [];
-    // Determine if sender is p1 or p2 (by position in player_ids array)
     const playerIndex = playerIds.indexOf(senderUid);
     if (playerIndex === -1) {
         console.error(`Sender ${senderUid} not in match ${matchId} players`);
@@ -125,7 +124,7 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     }
     const vibeKey = playerIndex === 0 ? "p1_vibe" : "p2_vibe";
     // ── Load AI character config ─────────────────────────────────────────
-    const character = await loadCharacter(characterId);
+    await loadCharacter(characterId);
     // ── Read current vibe from RTDB ──────────────────────────────────────
     const vibeRef = rtdb.ref(`active_states/${matchId}/${vibeKey}`);
     const vibeSnap = await vibeRef.get();
@@ -157,11 +156,21 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
         text: d.text,
     }));
     const lastAIMsg = [...allDocs].reverse().find((d) => d.role === "model")?.text ?? "";
-    // ── Run OpenRouter + Gemini Judge in parallel ────────────────────────
-    const [aiResult, rizzDelta] = await Promise.all([
-        (0, openRouterService_1.getAIResponse)(openrouterKey.value(), characterId, history, currentVibe),
-        (0, geminiJudge_1.scoreMessage)(geminiKey.value(), characterId, lastAIMsg, userText),
-    ]);
+    // ── Compute response time for timing multiplier ──────────────────────
+    const lastAITimestamp = [...allDocs]
+        .reverse()
+        .find((d) => d.role === "model")?._ts ?? 0;
+    const userMsgTimestamp = data.timestamp?.toMillis?.() ?? Date.now();
+    const responseTimeSec = lastAITimestamp > 0
+        ? (userMsgTimestamp - lastAITimestamp) / 1000
+        : 4.0; // Default to sweet spot for the first message
+    // ── Get AI response via Gemini ───────────────────────────────────────
+    const aiResult = await (0, geminiChatService_1.getAIResponse)(geminiKey.value(), characterId, history, currentVibe);
+    // ── Score the user message via Gemini Judge ──────────────────────────
+    const scoringResult = await (0, geminiJudge_1.scoreMessage)(geminiKey.value(), characterId, lastAIMsg, userText);
+    // ── Apply Turn Score formula ─────────────────────────────────────────
+    const timingMult = (0, geminiJudge_1.getTimingMult)(responseTimeSec);
+    const turnResult = (0, geminiJudge_1.computeTurnScore)(scoringResult, timingMult);
     // ── Write AI reply to Firestore chat subcollection ───────────────────
     await db.collection(`matches/${matchId}/chat`).add({
         role: "model",
@@ -173,15 +182,27 @@ exports.onUserMessageSent = (0, firestore_1.onDocumentCreated)("matches/{matchId
     });
     // ── Update vibe in RTDB via transaction (atomic increment) ───────────
     const newVibe = await vibeRef.transaction((current) => {
-        return (current ?? 0) + rizzDelta;
+        return (current ?? 0) + turnResult.turnScore;
     });
-    const updatedVibe = newVibe.snapshot.val() ?? currentVibe + rizzDelta;
-    // ── Write rizz_delta back onto the original user message ─────────────
-    await snap.ref.update({ rizz_delta: rizzDelta });
-    console.log(`[${matchId}] ${senderUid} (${vibeKey}): +${rizzDelta} rizz → ${updatedVibe} total` +
+    const updatedVibe = newVibe.snapshot.val() ?? currentVibe + turnResult.turnScore;
+    // ── Write scoring breakdown back onto the original user message ──────
+    await snap.ref.update({
+        rizz_delta: turnResult.turnScore,
+        scoring: {
+            base_good: turnResult.baseGood,
+            base_bad: turnResult.baseBad,
+            persona_mult: turnResult.personaMult,
+            timing_mult: turnResult.timingMult,
+            reasoning: turnResult.reasoning,
+        },
+    });
+    console.log(`[${matchId}] ${senderUid} (${vibeKey}): ` +
+        `+${turnResult.turnScore} rizz (good=${turnResult.baseGood} ×persona=${turnResult.personaMult} ` +
+        `×timing=${turnResult.timingMult} −bad=${turnResult.baseBad}) ` +
+        `→ ${updatedVibe} total` +
         (aiResult.isDateAsk ? " ★ DATE ASK DETECTED" : ""));
     // ── Win detection: if AI asked for a date, finalize the match ────────
-    if (aiResult.isDateAsk && updatedVibe > openRouterService_1.WIN_THRESHOLD) {
+    if (aiResult.isDateAsk && updatedVibe > geminiChatService_1.WIN_THRESHOLD) {
         console.log(`[${matchId}] WINNER: ${senderUid}`);
         await (0, finalizeMatch_1.finalizeMatch)({ matchId, winnerUid: senderUid, playerIds });
     }
@@ -207,7 +228,7 @@ exports.cleanupExpiredMatchmaking = (0, scheduler_1.onSchedule)("every 5 minutes
     console.log(`[cleanup] Removed ${expired.size} expired matchmaking entries`);
 });
 // ─────────────────────────────────────────────────────────────────────────────
-// Scheduled: enforce match timeouts every 30 seconds.
+// Scheduled: enforce match timeouts every minute.
 // If a match has expired, the player with the higher vibe wins.
 // On a tie, it's a draw with no ELO change.
 // ─────────────────────────────────────────────────────────────────────────────

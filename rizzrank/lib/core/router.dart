@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,15 +20,38 @@ import '../features/history/presentation/history_page.dart';
 import '../features/profile/presentation/profile_page.dart';
 import '../features/preferences/presentation/preferences_page.dart';
 
+/// Bridges Firebase Auth stream into a [ChangeNotifier] so GoRouter can use
+/// [refreshListenable] without rebuilding the entire router on every auth event.
+class _AuthNotifier extends ChangeNotifier {
+  _AuthNotifier(FirebaseAuth auth) {
+    _sub = auth.authStateChanges().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<User?> _sub;
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
+
+final _authNotifierProvider = Provider<_AuthNotifier>((ref) {
+  final auth = ref.watch(firebaseAuthProvider);
+  final notifier = _AuthNotifier(auth);
+  ref.onDispose(notifier.dispose);
+  return notifier;
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final authNotifier = ref.watch(_authNotifierProvider);
+  final auth = ref.watch(firebaseAuthProvider);
 
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: authNotifier,
     redirect: (context, state) {
-      if (authState.isLoading) return null;
-
-      final isAuth = authState.value != null;
+      final isAuth = auth.currentUser != null;
       final isGoingToLogin =
           state.matchedLocation == '/login' || state.matchedLocation == '/';
 

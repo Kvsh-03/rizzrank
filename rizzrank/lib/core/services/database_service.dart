@@ -26,22 +26,29 @@ class DatabaseService {
   // Firestore: Users (profiles)
   // ---------------------------------------------------------------------------
 
-  /// Creates or merges a user profile in Firestore.
-  /// Uses toClientFirestore() to avoid writing server-managed fields.
+  /// Creates a user profile on first sign-in, or updates client-safe fields
+  /// on subsequent sign-ins. Checks existence first so that re-login does not
+  /// attempt to write server-managed fields (blocked by security rules).
   Future<void> createUserProfile(AppUser user) async {
-    final data = <String, dynamic>{
-      'display_name': user.displayName,
-      'rizz_title': user.rizzTitle,
-      'last_played': FieldValue.serverTimestamp(),
-      'elo_rating': user.eloRating,
-      'total_games': user.totalGames,
-      'wins': user.wins,
-      'losses': user.losses,
-    };
-    await _firestore.collection('users').doc(user.uid).set(
-          data,
-          SetOptions(merge: true),
-        );
+    final docRef = _firestore.collection('users').doc(user.uid);
+    final doc = await docRef.get();
+    if (doc.exists) {
+      await docRef.update({
+        'display_name': user.displayName,
+        'rizz_title': user.rizzTitle,
+        'last_played': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await docRef.set({
+        'display_name': user.displayName,
+        'rizz_title': user.rizzTitle,
+        'elo_rating': user.eloRating,
+        'total_games': 0,
+        'wins': 0,
+        'losses': 0,
+        'last_played': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   /// Updates only client-safe profile fields.
