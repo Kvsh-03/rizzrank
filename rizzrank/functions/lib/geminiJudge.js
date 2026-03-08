@@ -13,7 +13,7 @@ exports.scoreMessage = scoreMessage;
 exports.computeTurnScore = computeTurnScore;
 const generative_ai_1 = require("@google/generative-ai");
 const characters_1 = require("./characters");
-const SCORING_MODEL = "gemini-1.5-flash";
+const SCORING_MODEL = "gemini-3.1-flash-lite-preview";
 function buildScoringPrompt(characterDescription, characterName, lastAIMessage, userMessage, aiTraits = {}) {
     let traitContext = "";
     if (aiTraits && Object.keys(aiTraits).length > 0) {
@@ -47,16 +47,22 @@ function clamp(value, min, max) {
 }
 /**
  * Computes the timing multiplier based on response time.
- * - <3s: 0.5x (too fast = needy)
- * - 3-5s: 1/(x-2) curve (sweet spot, peaks at 3s)
- * - >5s: 1.0x (neutral)
+ * - <2s: 0.5x (too fast = needy/desperate)
+ * - 2-3s: ramp from 0.5x to 1.0x
+ * - 3-8s: 1.0x (sweet spot)
+ * - 8-15s: ramp from 1.0x to 0.7x
+ * - >15s: 0.7x (lost interest / distracted)
  */
 function getTimingMult(responseTimeSeconds) {
-    if (responseTimeSeconds < 3)
+    if (responseTimeSeconds < 2)
         return 0.5;
-    if (responseTimeSeconds <= 5)
-        return 1 / (responseTimeSeconds - 2);
-    return 1.0;
+    if (responseTimeSeconds < 3)
+        return 0.5 + 0.5 * (responseTimeSeconds - 2);
+    if (responseTimeSeconds <= 8)
+        return 1.0;
+    if (responseTimeSeconds <= 15)
+        return 1.0 - 0.3 * ((responseTimeSeconds - 8) / 7);
+    return 0.7;
 }
 /**
  * Asks Gemini to score a user message and returns the raw scoring components.

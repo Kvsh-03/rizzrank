@@ -1,5 +1,5 @@
 /**
- * Gemini Chat Service - uses gemini-2.0-flash for AI dialogue.
+ * Gemini Chat Service - uses gemini-3.1-flash-lite-preview for AI dialogue.
  *
  * Replaces the OpenRouter service. If the player's vibe score exceeds
  * WIN_THRESHOLD, a hidden instruction is injected to make the AI ask
@@ -9,7 +9,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getCharacter } from "./characters";
 
-const CHAT_MODEL = "gemini-1.5-flash";
+const CHAT_MODEL = "gemini-3.1-flash-lite-preview";
 export const WIN_THRESHOLD = 100;
 
 const WIN_INSTRUCTION =

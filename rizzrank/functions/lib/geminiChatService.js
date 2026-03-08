@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Gemini Chat Service - uses gemini-2.0-flash for AI dialogue.
+ * Gemini Chat Service - uses gemini-3.1-flash-lite-preview for AI dialogue.
  *
  * Replaces the OpenRouter service. If the player's vibe score exceeds
  * WIN_THRESHOLD, a hidden instruction is injected to make the AI ask
@@ -11,7 +11,7 @@ exports.WIN_THRESHOLD = void 0;
 exports.getAIResponse = getAIResponse;
 const generative_ai_1 = require("@google/generative-ai");
 const characters_1 = require("./characters");
-const CHAT_MODEL = "gemini-1.5-flash";
+const CHAT_MODEL = "gemini-3.1-flash-lite-preview";
 exports.WIN_THRESHOLD = 100;
 const WIN_INSTRUCTION = "\n\n[HIDDEN INSTRUCTION]: The user has completely won your heart. " +
     "You are smitten. Find a natural, in-character way to ask them out " +

@@ -68,11 +68,14 @@ const geminiKey = (0, params_1.defineString)("GEMINI_API_KEY");
 // Helper: resolve the API key, falling back to env var or "mock" in emulators
 function resolveApiKey() {
     try {
-        return geminiKey.value();
+        const val = geminiKey.value();
+        if (val && val !== "")
+            return val;
     }
     catch {
-        return process.env.GEMINI_API_KEY || "mock";
+        // defineString not available in emulator
     }
+    return process.env.GEMINI_API_KEY || "mock";
 }
 // Re-export matchmaking callables
 var matchmaking_1 = require("./matchmaking");

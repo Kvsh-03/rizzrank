@@ -23,6 +23,7 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
   int _waitTimer = 0;
   Timer? _countdownTimer;
   StreamSubscription<FirestoreMatch?>? _matchSub;
+  Timer? _matchTimeout;
   bool _searching = true;
   String? _errorMessage;
 
@@ -110,6 +111,17 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
           _navigateToMatch(match.matchId);
         }
       });
+
+      // Matchmaking timeout after 2 minutes
+      _matchTimeout = Timer(const Duration(minutes: 2), () {
+        if (mounted && _searching) {
+          _matchSub?.cancel();
+          setState(() {
+            _errorMessage = 'No opponents found. Try again later.';
+            _searching = false;
+          });
+        }
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -121,6 +133,7 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
 
   void _navigateToMatch(String matchId) {
     _matchSub?.cancel();
+    _matchTimeout?.cancel();
     if (mounted) {
       context.go('/chat/$matchId');
     }
@@ -140,6 +153,7 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
     _pulseController.dispose();
     _countdownTimer?.cancel();
     _matchSub?.cancel();
+    _matchTimeout?.cancel();
     super.dispose();
   }
 

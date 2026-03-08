@@ -1,18 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../../core/providers/firebase_providers.dart';
+import '../../../core/providers/match_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
-class ResultsPage extends StatelessWidget {
+class ResultsPage extends ConsumerWidget {
   const ResultsPage({super.key, required this.matchId, required this.outcome});
 
   final String matchId;
   final String outcome; // "victory" or "defeat"
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isVictory = outcome == 'victory';
+    final user = ref.watch(currentUserProvider).value;
+    final matchAsync = ref.watch(firestoreMatchStreamProvider(matchId));
+    final liveAsync = ref.watch(liveMatchStreamProvider(matchId));
+
+    // Extract real data with fallbacks
+    final match = matchAsync.value;
+    final live = liveAsync.value;
+
+    final myUid = user?.uid ?? '';
+    final eloChange = match?.eloChange[myUid] ?? (isVictory ? 25 : -12);
+    final myVibe = live?.vibeFor(myUid) ?? 0;
+    final opponentUid = live?.getOpponentUid(myUid);
+    final opponentVibe = opponentUid != null ? (live?.vibeFor(opponentUid) ?? 0) : 0;
+    final duration = match?.duration ?? 0;
+    final durationStr = duration > 0
+        ? '${(duration ~/ 60)}m ${(duration % 60)}s'
+        : '--';
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
@@ -127,7 +147,7 @@ class ResultsPage extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                isVictory ? '+25 ELO RATING' : '-12 ELO RATING',
+                                '${eloChange >= 0 ? "+" : ""}$eloChange ELO RATING',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: isVictory ? Colors.greenAccent : Colors.redAccent,
@@ -175,11 +195,11 @@ class ResultsPage extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _ScoreCard(label: 'You', score: 85, trend: '+13%', isActive: true),
+                    child: _ScoreCard(label: 'You', score: myVibe, trend: '', isActive: true),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _ScoreCard(label: 'Opponent', score: 72, trend: '-15%', isActive: false),
+                    child: _ScoreCard(label: 'Opponent', score: opponentVibe, trend: '', isActive: false),
                   ),
                 ],
               ),
@@ -199,14 +219,14 @@ class ResultsPage extends StatelessWidget {
                       icon: LucideIcons.sparkles,
                       label: 'Rizz Accuracy',
                       sublabel: 'AI confidence score',
-                      value: '98.2%',
+                      value: '$myVibe%',
                     ),
                     Divider(height: 24, color: AppTheme.primary.withOpacity(0.1)),
                     _StatRow(
                       icon: LucideIcons.timer,
                       label: 'Match Duration',
                       sublabel: 'Response speed avg',
-                      value: '4m 12s',
+                      value: durationStr,
                     ),
                   ],
                 ),
@@ -299,15 +319,17 @@ class _ScoreCard extends StatelessWidget {
                 '$score',
                 style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900),
               ),
-              const SizedBox(width: 6),
-              Text(
-                trend,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: trend.startsWith('+') ? Colors.greenAccent : Colors.redAccent,
+              if (trend.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Text(
+                  trend,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: trend.startsWith('+') ? Colors.greenAccent : Colors.redAccent,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
