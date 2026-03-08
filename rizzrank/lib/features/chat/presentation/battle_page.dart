@@ -24,6 +24,7 @@ class BattlePage extends ConsumerStatefulWidget {
 class _BattlePageState extends ConsumerState<BattlePage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
+  final _focusNode = FocusNode();
   Timer? _typingDebounce;
   bool _isForfeiting = false;
 
@@ -100,11 +101,23 @@ class _BattlePageState extends ConsumerState<BattlePage> {
     }
   }
 
+  void _onFocusChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+  }
+
   @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChange);
     _typingDebounce?.cancel();
     _textController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -178,7 +191,12 @@ class _BattlePageState extends ConsumerState<BattlePage> {
             : 0;
         final aiIsTyping = liveMatch.isTyping['ai_${user.uid}'] == true;
 
+        final isKeyboardVisible =
+            MediaQuery.of(context).viewInsets.bottom > 0 ||
+            _focusNode.hasFocus;
+
         return Scaffold(
+          resizeToAvoidBottomInset: true,
           backgroundColor: AppTheme.backgroundDark,
           appBar: AppBar(
             leading: Padding(
@@ -246,10 +264,25 @@ class _BattlePageState extends ConsumerState<BattlePage> {
               const SizedBox(width: 8),
             ],
           ),
-          body: Column(
-            children: [
-              // AI Profile Header
-              Container(
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              // Use compact header when keyboard visible, text field focused, or space is tight
+              final useCompactHeader = isKeyboardVisible ||
+                  constraints.maxHeight < 550;
+
+              return Column(
+                children: [
+                  // Compact header when keyboard visible, full header otherwise
+                  if (useCompactHeader)
+                    _CompactChatHeader(
+                      avatarUrl: aiCharAvatar,
+                      name: aiCharName,
+                      isForfeiting: _isForfeiting,
+                      onForfeit: _forfeit,
+                    )
+                  else ...[
+                // AI Profile Header
+                Container(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -362,22 +395,23 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                 ),
               ),
 
-              // Heart Meter & Opponent Ghost
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  children: [
-                    HeartMeter(score: myVibe),
-                    const SizedBox(height: 12),
-                    if (opponentUid != null)
-                      OpponentGhost(opponentScore: opponentVibe),
-                  ],
+                // Heart Meter & Opponent Ghost
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      HeartMeter(score: myVibe),
+                      const SizedBox(height: 12),
+                      if (opponentUid != null)
+                        OpponentGhost(opponentScore: opponentVibe),
+                    ],
+                  ),
                 ),
-              ),
+                  ],
 
-              // Chat Messages
-              Expanded(
-                child: messagesAsync.when(
+                  // Chat Messages
+                  Expanded(
+                    child: messagesAsync.when(
                   data: (messages) {
                     final reversedMessages = messages.reversed.toList();
 
@@ -385,6 +419,8 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                       controller: _scrollController,
                       padding: const EdgeInsets.all(16),
                       reverse: true,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: reversedMessages.length,
                       itemBuilder: (context, index) {
                         return ChatBubble(
@@ -398,62 +434,62 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('Error: $e')),
-                ),
-              ),
-
-              // AI Typing indicator
-              if (aiIsTyping)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundImage: NetworkImage(aiCharAvatar),
-                        onBackgroundImageError: (_, __) {},
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.pinkAccent,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '$aiCharName is typing...',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.5),
-                                fontSize: 13,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
 
-              // Input Bar
-              Container(
+                  // AI Typing indicator
+                  if (aiIsTyping)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundImage: NetworkImage(aiCharAvatar),
+                            onBackgroundImageError: (_, __) {},
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.pinkAccent,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '$aiCharName is typing...',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                    fontSize: 13,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Input Bar
+                  Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppTheme.backgroundDark.withOpacity(0.95),
@@ -470,6 +506,8 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                           children: [
                             TextField(
                               controller: _textController,
+                              focusNode: _focusNode,
+                              onTap: () => _scrollToBottom(),
                               onChanged: _onTextChanged,
                               decoration: InputDecoration(
                                 hintText: 'Type your smooth response...',
@@ -548,14 +586,109 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                     ],
                   ),
                 ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('Match Error: $e'))),
+    );
+  }
+}
+
+class _CompactChatHeader extends StatelessWidget {
+  const _CompactChatHeader({
+    required this.avatarUrl,
+    required this.name,
+    required this.isForfeiting,
+    required this.onForfeit,
+  });
+
+  final String avatarUrl;
+  final String name;
+  final bool isForfeiting;
+  final VoidCallback onForfeit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundDark,
+        border: Border(
+          bottom: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.grey[800],
+            child: ClipOval(
+              child: Image.network(
+                avatarUrl,
+                fit: BoxFit.cover,
+                width: 32,
+                height: 32,
+                errorBuilder: (_, __, ___) => const Icon(
+                  LucideIcons.user,
+                  color: Colors.white54,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          InkWell(
+            onTap: isForfeiting ? null : onForfeit,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.redAccent.withOpacity(0.2),
+                border: Border.all(
+                  color: Colors.redAccent.withOpacity(0.4),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'FORFEIT',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(
+                    LucideIcons.trophy,
+                    color: Colors.redAccent,
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

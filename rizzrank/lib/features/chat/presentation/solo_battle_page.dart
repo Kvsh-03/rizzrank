@@ -22,6 +22,7 @@ class SoloBattlePage extends StatefulWidget {
 class _SoloBattlePageState extends State<SoloBattlePage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
+  final _focusNode = FocusNode();
   final _random = Random();
 
   Map<String, dynamic>? _aiData;
@@ -46,6 +47,7 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
   @override
   void initState() {
     super.initState();
+    _focusNode.addListener(_onFocusChange);
     _loadAiData();
 
     _addAiMessage(
@@ -86,6 +88,10 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
         });
       }
     }
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() {});
   }
 
   void _addAiMessage(String text) {
@@ -150,8 +156,10 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
 
   @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChange);
     _textController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -172,7 +180,12 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
         _aiData!['avatarUrl'] ??
         'https://via.placeholder.com/150';
 
+    final isKeyboardVisible =
+        MediaQuery.of(context).viewInsets.bottom > 0 ||
+        _focusNode.hasFocus;
+
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: AppTheme.backgroundDark,
       appBar: AppBar(
         leading: IconButton(
@@ -226,10 +239,23 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          // AI Profile Header
-          Container(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final useCompactHeader = isKeyboardVisible ||
+              constraints.maxHeight < 550;
+
+          return Column(
+            children: [
+              // Compact header when keyboard visible, full header otherwise
+              if (useCompactHeader)
+                _CompactSoloChatHeader(
+                avatarUrl: avatarUrl,
+                name: name,
+                onFinish: () => context.go('/results/victory/solo'),
+              )
+            else ...[
+            // AI Profile Header
+            Container(
             padding: const EdgeInsets.symmetric(vertical: 20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -337,19 +363,22 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                 ),
               ],
             ),
-          ),
+            ),
 
-          // Heart Meter
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: HeartMeter(score: _affection),
-          ),
+            // Heart Meter
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: HeartMeter(score: _affection),
+            ),
+            ],
 
-          // Chat Messages
-          Expanded(
-            child: ListView.builder(
+            // Chat Messages
+            Expanded(
+              child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.all(16),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
               itemCount: _messages.length + (_isTyping ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == _messages.length && _isTyping) {
@@ -361,11 +390,11 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                   aiName: name,
                 );
               },
+              ),
             ),
-          ),
 
-          // Input Bar
-          Container(
+            // Input Bar
+            Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppTheme.backgroundDark.withOpacity(0.95),
@@ -382,6 +411,8 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                       children: [
                         TextField(
                           controller: _textController,
+                          focusNode: _focusNode,
+                          onTap: () => _scrollToBottom(),
                           decoration: InputDecoration(
                             hintText: 'Type your smooth response...',
                             hintStyle: TextStyle(
@@ -453,6 +484,99 @@ class _SoloBattlePageState extends State<SoloBattlePage> {
                       color: AppTheme.primary,
                       size: 20,
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CompactSoloChatHeader extends StatelessWidget {
+  const _CompactSoloChatHeader({
+    required this.avatarUrl,
+    required this.name,
+    required this.onFinish,
+  });
+
+  final String avatarUrl;
+  final String name;
+  final VoidCallback onFinish;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundDark,
+        border: Border(
+          bottom: BorderSide(color: AppTheme.primary.withOpacity(0.2)),
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.grey[800],
+            child: ClipOval(
+              child: Image.network(
+                avatarUrl,
+                fit: BoxFit.cover,
+                width: 32,
+                height: 32,
+                errorBuilder: (_, __, ___) => const Icon(
+                  LucideIcons.user,
+                  color: Colors.white54,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          InkWell(
+            onTap: onFinish,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.greenAccent.withOpacity(0.2),
+                border: Border.all(
+                  color: Colors.greenAccent.withOpacity(0.4),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'FINISH',
+                    style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(
+                    LucideIcons.trophy,
+                    color: Colors.greenAccent,
+                    size: 16,
                   ),
                 ],
               ),

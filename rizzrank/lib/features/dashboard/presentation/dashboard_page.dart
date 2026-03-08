@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../auth/data/auth_service.dart';
 
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../debug_log_io.dart' if (dart.library.html) 'debug_log_stub.dart' as debug_log;
+
+const _kSeedAiModelsThrottleMs = 15000; // 15s - survives hot restart, avoids "was already running"
+const _kSeedAiModelsLastStartKey = 'seed_ai_models_last_start_ms';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -14,16 +19,42 @@ class DashboardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
 
-    // One-time seed of AI models when user first loads dashboard (idempotent)
+    // One-time seed of AI models when user first loads dashboard (idempotent).
+    // Persistent throttle prevents overlapping calls on hot restart when native
+    // layer still has previous request in flight.
     ref.listen(currentUserProvider, (prev, next) {
       if (prev?.value == null && next.value != null) {
         Future.microtask(() async {
           try {
+            final prefs = await SharedPreferences.getInstance();
+            final lastStart = prefs.getInt(_kSeedAiModelsLastStartKey) ?? 0;
+            final now = DateTime.now().millisecondsSinceEpoch;
+            if (now - lastStart < _kSeedAiModelsThrottleMs) {
+              // #region agent log
+              debug_log.debugLog('dashboard_page.dart:35', 'seedAiModels skipped (throttled)',
+                  {'lastStart': lastStart, 'now': now, 'elapsed': now - lastStart}, 'H3');
+              // #endregion
+              return;
+            }
+            await prefs.setInt(_kSeedAiModelsLastStartKey, now);
+            // #region agent log
+            debug_log.debugLog('dashboard_page.dart:42', 'seedAiModels about to call',
+                {'prevNull': prev?.value == null, 'nextHasValue': next.value != null}, 'H3');
+            // #endregion
             await ref
                 .read(firebaseFunctionsProvider)
                 .httpsCallable('seedAiModels')
                 .call();
-          } catch (_) {}
+            // #region agent log
+            debug_log.debugLog('dashboard_page.dart:50', 'seedAiModels completed',
+                {}, 'H3');
+            // #endregion
+          } catch (e, st) {
+            // #region agent log
+            debug_log.debugLog('dashboard_page.dart:55', 'seedAiModels failed',
+                {'error': e.toString(), 'stack': st.toString().split('\n').take(3).join('; ')}, 'H4');
+            // #endregion
+          }
         });
       }
     });
