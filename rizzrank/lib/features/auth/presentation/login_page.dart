@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,18 +21,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    debugPrint('[LoginPage] _handleLogin called with name="$name"');
     setState(() => _isLoading = true);
     try {
       final authService = ref.read(authServiceProvider);
       await authService.signInAnonymously(name);
-      debugPrint('[LoginPage] Sign-in succeeded, navigating to /dashboard');
       if (mounted) context.go('/dashboard');
-    } catch (e, stack) {
-      debugPrint('[LoginPage] Login failed: $e\n$stack');
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Login failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    setState(() => _isLoading = true);
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.signInWithGoogle();
+      if (mounted) context.go('/dashboard');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google login failed: $e')),
         );
       }
     } finally {
@@ -195,12 +208,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Social login buttons (decorative)
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () {},
+                              onPressed: _isLoading ? null : _handleGoogleLogin,
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
                                 side: BorderSide(color: Colors.white.withOpacity(0.15)),
