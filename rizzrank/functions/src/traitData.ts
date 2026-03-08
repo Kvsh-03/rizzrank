@@ -708,3 +708,79 @@ export function pickRandomTraits(): Record<string, string> {
   }
   return result;
 }
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pickN<T>(arr: T[], n: number): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+const FIRST_NAMES = [
+  "Alex", "Jordan", "Sam", "Riley", "Morgan", "Casey", "Avery", "Quinn",
+  "Skyler", "Reese", "Dakota", "Parker", "Cameron", "Blake", "Drew",
+  "Emery", "Finley", "Harper", "Jamie", "Kendall", "Logan", "Marley",
+  "Noah", "Oakley", "Peyton", "River", "Sage", "Taylor", "Charlie",
+];
+
+/** Picks dynamic traits for a generated AI character. preferredGender: Man | Woman | Other. */
+export function pickDynamicTraits(preferredGender: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  result.ages = pickRandom(TRAIT_DATA.ages);
+  result.careers = pickRandom(TRAIT_DATA.careers);
+  result.communication_styles = pickRandom(TRAIT_DATA.communication_styles);
+  result.ethnicities = pickRandom(TRAIT_DATA.ethnicities);
+  result.genders = preferredGender;
+  result.heights = pickRandom(TRAIT_DATA.heights);
+  const hobbies = pickN(TRAIT_DATA.hobbies, 3);
+  result.hobbies = hobbies.join(", ");
+  result.intelligence = pickRandom(TRAIT_DATA.intelligence);
+  const loveLangs = pickN(TRAIT_DATA.love_languages, 2);
+  result.love_languages = loveLangs.join(" and ");
+  result.moods = pickRandom(TRAIT_DATA.moods);
+  result.personality_traits = pickRandom(TRAIT_DATA.personality_traits);
+  result.social_penetration_theory = pickRandom(TRAIT_DATA.social_penetration_theory);
+  return result;
+}
+
+/** Generates a random character name. */
+export function generateCharacterName(): string {
+  return pickRandom(FIRST_NAMES);
+}
+
+/** Builds the full system prompt for a dynamic AI character. */
+export function buildDynamicSystemPrompt(traits: Record<string, string>, name: string): string {
+  const parts: string[] = [];
+  if (traits.genders) parts.push(`You are a ${traits.genders}.`);
+  if (traits.ages) parts.push(`You are ${traits.ages} years old.`);
+  if (traits.heights) parts.push(`You are ${traits.heights} tall.`);
+  if (traits.ethnicities) parts.push(`Your ethnicity is ${traits.ethnicities}.`);
+  if (traits.careers) parts.push(`You work as a ${traits.careers}.`);
+  if (traits.hobbies) parts.push(`Your hobbies include: ${traits.hobbies}.`);
+  if (traits.personality_traits) parts.push(`Your personality is ${traits.personality_traits}.`);
+  if (traits.moods) parts.push(`Your current mood is ${traits.moods}.`);
+  if (traits.communication_styles) parts.push(`Your communication style is ${traits.communication_styles}.`);
+  if (traits.love_languages) parts.push(`Your love languages are ${traits.love_languages}.`);
+  if (traits.intelligence) parts.push(`Your IQ range is ${traits.intelligence}.`);
+  if (traits.social_penetration_theory) parts.push(`In conversation you are a ${traits.social_penetration_theory}.`);
+
+  const personaBlock = parts.join(" ");
+  return `You are ${name}. ${personaBlock}
+
+You are currently in a 'Rizz' battle with the user. Be challenging but potentially winnable if they show real wit or charm. Keep responses concise and in character.`;
+}
+
+const OPENING_LINES = [
+  "Hey, so... what brings you here?",
+  "Alright, let's see what you've got.",
+  "Interesting. I usually don't stick around for small talk.",
+  "So you think you can keep up? We'll see.",
+  "Honestly, I'm not easily impressed. Change my mind?",
+];
+
+/** Returns a random opening line for a dynamic character. */
+export function getDynamicOpeningLine(): string {
+  return pickRandom(OPENING_LINES);
+}

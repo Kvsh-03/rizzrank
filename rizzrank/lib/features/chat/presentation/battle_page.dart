@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +25,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   Timer? _typingDebounce;
+  bool _isForfeiting = false;
 
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
@@ -69,21 +69,33 @@ class _BattlePageState extends ConsumerState<BattlePage> {
     _typingDebounce?.cancel();
 
     try {
-      final firestore = ref.read(firestoreProvider);
-      await firestore
-          .collection('matches/${widget.matchId}/players/$uid/messages')
-          .add({
-            'role': 'user',
-            'content': text,
-            'sender_uid': uid,
-            'timestamp': FieldValue.serverTimestamp(),
-          });
+      await ref.read(databaseServiceProvider).sendMessageToRTDB(
+        widget.matchId,
+        uid,
+        text,
+      );
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _forfeit() async {
+    if (_isForfeiting) return;
+    setState(() => _isForfeiting = true);
+    try {
+      await ref.read(matchmakingServiceProvider).forfeitMatch(widget.matchId);
+      if (mounted) context.go('/results/defeat/${widget.matchId}');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isForfeiting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Forfeit failed: $e')),
+        );
       }
     }
   }
@@ -117,24 +129,41 @@ class _BattlePageState extends ConsumerState<BattlePage> {
       }
     });
 
+    // Navigate away if active_match_id changes (user cancelled, match invalidated)
+    ref.listen(currentUserProvider, (prev, next) {
+      final u = next.value;
+      if (u != null && u.activeMatchId != widget.matchId) {
+        if (u.activeMatchId == null || u.activeMatchId!.isEmpty) {
+          if (mounted) context.go('/dashboard');
+        } else {
+          if (mounted) context.go('/chat/${u.activeMatchId}');
+        }
+      }
+    });
+
     return liveMatchAsync.when(
       data: (liveMatch) {
         if (liveMatch == null) {
           return const Scaffold(body: Center(child: Text('Match not found')));
         }
 
+        final aiCharName = liveMatch.aiCharacterName ??
+            (ref.watch(aiModelsProvider).valueOrNull ?? [])
+                .cast<Map<String, dynamic>>()
+                .firstWhere(
+                  (m) => m['id'] == liveMatch.aiCharacterId,
+                  orElse: () => {'name': 'Unknown AI'},
+                )['name'] as String? ??
+            'Unknown AI';
         final aiModels = ref.watch(aiModelsProvider).valueOrNull ?? [];
-        final aiChar = aiModels.firstWhere(
+        final aiChar = aiModels.cast<Map<String, dynamic>>().firstWhere(
           (m) => m['id'] == liveMatch.aiCharacterId,
           orElse: () => {
-            'name': 'Unknown AI',
             'role': 'Mystery',
             'description': 'An enigma.',
-            'avatarUrl': 'https://via.placeholder.com/150',
+            'avatar_url': 'https://via.placeholder.com/150',
           },
         );
-
-        final aiCharName = aiChar['name'] as String? ?? 'Unknown AI';
         final aiCharRole = aiChar['role'] as String? ?? 'Mystery';
         final aiCharDescription =
             aiChar['description'] as String? ?? 'An enigma.';
@@ -178,7 +207,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: InkWell(
-                  onTap: () => context.go('/results/defeat/${widget.matchId}'),
+                  onTap: _isForfeiting ? null : _forfeit,
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(

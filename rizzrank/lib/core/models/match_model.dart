@@ -4,13 +4,14 @@ import 'package:firebase_database/firebase_database.dart';
 /// Path: active_states/{matchId}
 ///
 /// Flat schema:
-///   status, player_ids, ai_character_id, target_phrase,
+///   status, player_ids, ai_character_id, ai_character_name, target_phrase,
 ///   p1_vibe, p2_vibe, is_typing, winner_uid, expires_at, created_at
 class ActiveMatchState {
   final String matchId;
   final String status;
   final List<String> playerIds;
   final String aiCharacterId;
+  final String? aiCharacterName;
   final String targetPhrase;
   final int p1Vibe;
   final int p2Vibe;
@@ -24,6 +25,7 @@ class ActiveMatchState {
     this.status = 'active',
     this.playerIds = const [],
     this.aiCharacterId = 'luna',
+    this.aiCharacterName,
     this.targetPhrase = '',
     this.p1Vibe = 0,
     this.p2Vibe = 0,
@@ -57,6 +59,7 @@ class ActiveMatchState {
           map['ai_character_id'] as String? ??
           map['aiCharacterId'] as String? ??
           'luna',
+      aiCharacterName: map['ai_character_name'] as String? ?? map['aiCharacterName'] as String?,
       targetPhrase:
           map['target_phrase'] as String? ??
           map['targetPhrase'] as String? ??

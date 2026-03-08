@@ -8,6 +8,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { Timestamp, FieldValue } from "firebase-admin/firestore";
 
 const K_FACTOR = 32;
 
@@ -76,6 +77,29 @@ export async function finalizeMatch(params: FinalizeParams): Promise<void> {
     `loser=${loserUid} (${loserDelta}), duration=${duration}s`
   );
 
+  // Copy RTDB messages to Firestore for match history
+  for (const uid of playerIds) {
+    const messagesSnap = await rtdb
+      .ref(`matches/${matchId}/players/${uid}/messages`)
+      .orderByChild("timestamp")
+      .get();
+    if (messagesSnap.exists() && messagesSnap.val()) {
+      const val = messagesSnap.val() as Record<string, Record<string, unknown>>;
+      const messagesRef = db.collection(`matches/${matchId}/players/${uid}/messages`);
+      for (const [, msg] of Object.entries(val)) {
+        const ts = msg.timestamp as number | undefined;
+        await messagesRef.add({
+          role: msg.role,
+          content: msg.content ?? msg.text,
+          sender_uid: msg.sender_uid,
+          timestamp: ts != null ? Timestamp.fromMillis(ts) : FieldValue.serverTimestamp(),
+          rizz_delta: msg.rizz_delta ?? null,
+          scoring: msg.scoring ?? null,
+        });
+      }
+    }
+  }
+
   const batch = db.batch();
 
   batch.update(db.doc(`matches/${matchId}`), {
@@ -87,18 +111,18 @@ export async function finalizeMatch(params: FinalizeParams): Promise<void> {
   });
 
   batch.update(db.doc(`users/${winnerUid}`), {
-    elo_rating: admin.firestore.FieldValue.increment(winnerDelta),
-    wins: admin.firestore.FieldValue.increment(1),
-    total_games: admin.firestore.FieldValue.increment(1),
-    last_played: admin.firestore.FieldValue.serverTimestamp(),
+    elo_rating: FieldValue.increment(winnerDelta),
+    wins: FieldValue.increment(1),
+    total_games: FieldValue.increment(1),
+    last_played: FieldValue.serverTimestamp(),
     active_match_id: null,
   });
 
   batch.update(db.doc(`users/${loserUid}`), {
-    elo_rating: admin.firestore.FieldValue.increment(loserDelta),
-    losses: admin.firestore.FieldValue.increment(1),
-    total_games: admin.firestore.FieldValue.increment(1),
-    last_played: admin.firestore.FieldValue.serverTimestamp(),
+    elo_rating: FieldValue.increment(loserDelta),
+    losses: FieldValue.increment(1),
+    total_games: FieldValue.increment(1),
+    last_played: FieldValue.serverTimestamp(),
     active_match_id: null,
   });
 
@@ -108,6 +132,10 @@ export async function finalizeMatch(params: FinalizeParams): Promise<void> {
     status: "completed",
     winner_uid: winnerUid,
   });
+
+  for (const uid of playerIds) {
+    await rtdb.ref(`matchmaking_matches/${uid}`).remove();
+  }
 }
 
 /**
@@ -133,8 +161,8 @@ export async function drawMatch(matchId: string, playerIds: string[]): Promise<v
 
   for (const uid of playerIds) {
     batch.update(db.doc(`users/${uid}`), {
-      total_games: admin.firestore.FieldValue.increment(1),
-      last_played: admin.firestore.FieldValue.serverTimestamp(),
+      total_games: FieldValue.increment(1),
+      last_played: FieldValue.serverTimestamp(),
       active_match_id: null,
     });
   }
@@ -145,4 +173,8 @@ export async function drawMatch(matchId: string, playerIds: string[]): Promise<v
     status: "timed_out",
     winner_uid: null,
   });
+
+  for (const uid of playerIds) {
+    await rtdb.ref(`matchmaking_matches/${uid}`).remove();
+  }
 }

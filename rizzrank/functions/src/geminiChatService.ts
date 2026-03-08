@@ -64,6 +64,9 @@ function buildTraitPrompt(traits: Record<string, string>): string {
  * Calls Gemini 2.0 Flash with conversation history.
  * Injects win instruction if vibe > WIN_THRESHOLD.
  * Returns the AI reply text and whether a date-ask was detected.
+ *
+ * For dynamic characters: pass systemInstructionOverride (full prompt) and
+ * characterNameOverride. When both are set, aiTraits are not appended (already in prompt).
  */
 export async function getAIResponse(
   apiKey: string,
@@ -71,12 +74,15 @@ export async function getAIResponse(
   history: ChatMessage[],
   currentVibe: number,
   aiTraits: Record<string, string> = {},
-  systemInstructionOverride?: string
+  systemInstructionOverride?: string,
+  characterNameOverride?: string
 ): Promise<{ text: string; isDateAsk: boolean }> {
   const character = getCharacter(characterId);
+  const characterName = characterNameOverride ?? character.name;
 
   const baseInstruction = systemInstructionOverride || character.systemInstruction;
-  let systemContent = baseInstruction + buildTraitPrompt(aiTraits);
+  const traitBlock = systemInstructionOverride ? "" : buildTraitPrompt(aiTraits);
+  let systemContent = baseInstruction + traitBlock;
   if (currentVibe > WIN_THRESHOLD) {
     systemContent += WIN_INSTRUCTION;
   }
@@ -93,7 +99,7 @@ export async function getAIResponse(
   // which requires strict user→model alternation starting with "user".
   const transcript = history
     .map((m) => {
-      const speaker = m.role === "user" ? "User" : character.name;
+      const speaker = m.role === "user" ? "User" : characterName;
       return `${speaker}: ${m.text}`;
     })
     .join("\n");
@@ -103,7 +109,7 @@ export async function getAIResponse(
     "\n\n--- Conversation so far ---\n" +
     transcript +
     "\n\n" +
-    `Now respond as ${character.name}. Reply with ONLY your next message, no prefix or label.`;
+    `Now respond as ${characterName}. Reply with ONLY your next message, no prefix or label.`;
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
@@ -119,7 +125,7 @@ export async function getAIResponse(
     "[AI could not generate a response]";
 
   // Strip any accidental prefix like "Luna: " from the response
-  const prefixPattern = new RegExp(`^${character.name}:\\s*`, "i");
+  const prefixPattern = new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "i");
   text = text.replace(prefixPattern, "").trim();
 
   const isDateAsk =

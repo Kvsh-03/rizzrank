@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 
-/// Firestore chat message for matches/{matchId}/chat/{autoId}.
+/// Chat message for matches/{matchId}/players/{uid}/messages.
+/// Supports both Firestore (history) and RTDB (live) formats.
 ///
 /// Clients create user messages (role='user') with their own sender_uid.
 /// Cloud Functions create AI replies (role='model') with sender_uid='ai_{characterId}'.
@@ -26,6 +28,13 @@ class ChatMessage {
   factory ChatMessage.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     return ChatMessage.fromMap(doc.id, data);
+  }
+
+  factory ChatMessage.fromRTDB(DataSnapshot snapshot) {
+    final key = snapshot.key;
+    final map = snapshot.value;
+    if (map is! Map) return ChatMessage.fromMap(key, {});
+    return ChatMessage.fromMap(key, Map<String, dynamic>.from(map));
   }
 
   factory ChatMessage.fromMap(String? key, Map<String, dynamic> map) {

@@ -67,11 +67,16 @@ function buildTraitPrompt(traits) {
  * Calls Gemini 2.0 Flash with conversation history.
  * Injects win instruction if vibe > WIN_THRESHOLD.
  * Returns the AI reply text and whether a date-ask was detected.
+ *
+ * For dynamic characters: pass systemInstructionOverride (full prompt) and
+ * characterNameOverride. When both are set, aiTraits are not appended (already in prompt).
  */
-async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits = {}, systemInstructionOverride) {
+async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits = {}, systemInstructionOverride, characterNameOverride) {
     const character = (0, characters_1.getCharacter)(characterId);
+    const characterName = characterNameOverride ?? character.name;
     const baseInstruction = systemInstructionOverride || character.systemInstruction;
-    let systemContent = baseInstruction + buildTraitPrompt(aiTraits);
+    const traitBlock = systemInstructionOverride ? "" : buildTraitPrompt(aiTraits);
+    let systemContent = baseInstruction + traitBlock;
     if (currentVibe > exports.WIN_THRESHOLD) {
         systemContent += WIN_INSTRUCTION;
     }
@@ -86,7 +91,7 @@ async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits
     // which requires strict user→model alternation starting with "user".
     const transcript = history
         .map((m) => {
-        const speaker = m.role === "user" ? "User" : character.name;
+        const speaker = m.role === "user" ? "User" : characterName;
         return `${speaker}: ${m.text}`;
     })
         .join("\n");
@@ -94,7 +99,7 @@ async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits
         "\n\n--- Conversation so far ---\n" +
         transcript +
         "\n\n" +
-        `Now respond as ${character.name}. Reply with ONLY your next message, no prefix or label.`;
+        `Now respond as ${characterName}. Reply with ONLY your next message, no prefix or label.`;
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
         model: CHAT_MODEL,
@@ -107,7 +112,7 @@ async function getAIResponse(apiKey, characterId, history, currentVibe, aiTraits
     let text = result.response.text().trim() ||
         "[AI could not generate a response]";
     // Strip any accidental prefix like "Luna: " from the response
-    const prefixPattern = new RegExp(`^${character.name}:\\s*`, "i");
+    const prefixPattern = new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "i");
     text = text.replace(prefixPattern, "").trim();
     const isDateAsk = currentVibe > exports.WIN_THRESHOLD && detectDateAsk(text);
     return { text, isDateAsk };

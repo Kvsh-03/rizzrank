@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 
+import '../debug_log.dart';
+import '../models/chat_message.dart';
 import '../models/firestore_match_model.dart';
 import '../models/match_model.dart';
 import '../models/user_model.dart';
@@ -54,6 +56,7 @@ class DatabaseService {
     String uid, {
     String? displayName,
     String? rizzTitle,
+    String? gender,
     String? preferredGender,
   }) async {
     final updates = <String, dynamic>{
@@ -61,6 +64,7 @@ class DatabaseService {
     };
     if (displayName != null) updates['display_name'] = displayName;
     if (rizzTitle != null) updates['rizz_title'] = rizzTitle;
+    if (gender != null) updates['gender'] = gender;
     if (preferredGender != null) updates['preferred_gender'] = preferredGender;
     await _firestore.collection('users').doc(uid).update(updates);
   }
@@ -72,7 +76,15 @@ class DatabaseService {
   }
 
   Stream<AppUser?> watchUserProfile(String uid) {
-    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
+    // #region agent log
+    debugLog(location: 'database_service.dart:77', message: 'watchUserProfile Firestore path', data: {'path': 'users/$uid'}, hypothesisId: 'H1');
+    // #endregion
+    return _firestore.collection('users').doc(uid).snapshots().handleError((e, st) {
+      // #region agent log
+      debugLog(location: 'database_service.dart:82', message: 'watchUserProfile Firestore ERROR', data: {'error': e.toString(), 'code': e is FirebaseException ? e.code : 'unknown', 'plugin': e is FirebaseException ? e.plugin : 'unknown'}, hypothesisId: 'H14');
+      // #endregion
+      throw e;
+    }).map((doc) {
       if (!doc.exists || doc.data() == null) return null;
       return AppUser.fromFirestore(doc);
     });
@@ -81,8 +93,18 @@ class DatabaseService {
   /// Returns the active match ID for a user, or null if they have no active match.
   /// Used on app startup for reconnection.
   Future<String?> getActiveMatchId(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    return doc.data()?['active_match_id'] as String?;
+    // #region agent log
+    debugLog(location: 'database_service.dart:87', message: 'getActiveMatchId Firestore path', data: {'path': 'users/$uid'}, hypothesisId: 'H1');
+    // #endregion
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      return doc.data()?['active_match_id'] as String?;
+    } catch (e) {
+      // #region agent log
+      debugLog(location: 'database_service.dart:95', message: 'getActiveMatchId Firestore ERROR', data: {'error': e.toString(), 'code': e is FirebaseException ? e.code : 'unknown'}, hypothesisId: 'H14');
+      // #endregion
+      rethrow;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -145,6 +167,53 @@ class DatabaseService {
       final val = event.snapshot.value;
       if (val is Map) return Map<String, dynamic>.from(val);
       return null;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // RTDB: Live messages during active match
+  // Path: matches/{matchId}/players/{uid}/messages
+  // ---------------------------------------------------------------------------
+
+  /// Sends a user message to RTDB (for active matches).
+  Future<void> sendMessageToRTDB(
+    String matchId,
+    String uid,
+    String content,
+  ) async {
+    final ref = _database.ref('matches/$matchId/players/$uid/messages');
+    await ref.push().set({
+      'role': 'user',
+      'content': content,
+      'sender_uid': uid,
+      'timestamp': ServerValue.timestamp,
+    });
+  }
+
+  /// Streams messages from RTDB for an active match.
+  Stream<List<ChatMessage>> watchMessagesFromRTDB(
+    String matchId,
+    String uid,
+  ) {
+    return _database
+        .ref('matches/$matchId/players/$uid/messages')
+        .orderByChild('timestamp')
+        .onValue
+        .map((event) {
+      if (!event.snapshot.exists) return <ChatMessage>[];
+      final val = event.snapshot.value;
+      if (val is! Map) return <ChatMessage>[];
+      final list = <ChatMessage>[];
+      for (final entry in val.entries) {
+        if (entry.value is Map) {
+          list.add(ChatMessage.fromMap(
+            entry.key,
+            Map<String, dynamic>.from(entry.value as Map),
+          ));
+        }
+      }
+      list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return list;
     });
   }
 

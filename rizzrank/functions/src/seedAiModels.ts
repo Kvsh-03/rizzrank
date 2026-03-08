@@ -28,6 +28,7 @@ async function seed(): Promise<void> {
       role: char.role,
       avatar_url: char.avatar,
       difficulty: char.difficulty,
+      gender: char.gender,
     });
   }
 

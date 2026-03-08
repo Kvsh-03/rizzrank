@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../core/providers/app_state_providers.dart';
+import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
 const _lookingForOptions = [
@@ -44,6 +45,8 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
   late String _lookingFor;
   late String _idealDate;
   late String _communicationStyle;
+  late String _gender;
+  late String _preferredGender;
   late TextEditingController _interestsCtrl;
   late TextEditingController _aboutMeCtrl;
   late TextEditingController _dealBreakersCtrl;
@@ -52,9 +55,12 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
   void initState() {
     super.initState();
     final prefs = ref.read(userPreferencesProvider);
+    final user = ref.read(currentUserProvider).value;
     _lookingFor = prefs.lookingFor;
     _idealDate = prefs.idealDate;
     _communicationStyle = prefs.communicationStyle;
+    _gender = user?.gender ?? '';
+    _preferredGender = user?.preferredGender ?? '';
     _interestsCtrl = TextEditingController(text: prefs.interests);
     _aboutMeCtrl = TextEditingController(text: prefs.aboutMe);
     _dealBreakersCtrl = TextEditingController(text: prefs.dealBreakers);
@@ -68,7 +74,7 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     ref.read(userPreferencesProvider.notifier).state = UserPreferences(
       lookingFor: _lookingFor,
       idealDate: _idealDate,
@@ -77,7 +83,15 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
       aboutMe: _aboutMeCtrl.text,
       dealBreakers: _dealBreakersCtrl.text,
     );
-    context.pop();
+    final user = ref.read(currentUserProvider).value;
+    if (user != null) {
+      await ref.read(databaseServiceProvider).updateUserProfile(
+        user.uid,
+        gender: _gender.isEmpty ? null : _gender,
+        preferredGender: _preferredGender.isEmpty ? null : _preferredGender,
+      );
+    }
+    if (mounted) context.pop();
   }
 
   @override
@@ -96,7 +110,7 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
         centerTitle: true,
         actions: [
           TextButton.icon(
-            onPressed: _save,
+            onPressed: () => _save(),
             icon: const Icon(LucideIcons.save, size: 18, color: AppTheme.primary),
             label: const Text('Save', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
           ),
@@ -130,6 +144,20 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
               ],
             ),
             const SizedBox(height: 28),
+            _GenderDropdownField(
+              label: 'Your gender',
+              value: _gender,
+              onChanged: (v) => setState(() => _gender = v),
+              traitsAsync: ref.watch(traitsProvider),
+            ),
+            const SizedBox(height: 20),
+            _PreferredGenderDropdownField(
+              label: 'Preferred AI character gender',
+              value: _preferredGender,
+              onChanged: (v) => setState(() => _preferredGender = v),
+              traitsAsync: ref.watch(traitsProvider),
+            ),
+            const SizedBox(height: 20),
             _DropdownField(
               label: 'What are you looking for?',
               value: _lookingFor,
@@ -173,7 +201,7 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _save,
+                onPressed: () => _save(),
                 icon: const Icon(LucideIcons.save, size: 20),
                 label: const Text('Save Preferences',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -191,6 +219,57 @@ class _PreferencesPageState extends ConsumerState<PreferencesPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _GenderDropdownField extends StatelessWidget {
+  const _GenderDropdownField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.traitsAsync,
+  });
+
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+  final AsyncValue<Map<String, List<String>>> traitsAsync;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = traitsAsync.valueOrNull?['genders'] ?? ['Man', 'Woman', 'Other'];
+    return _DropdownField(
+      label: label,
+      value: value,
+      options: options,
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _PreferredGenderDropdownField extends StatelessWidget {
+  const _PreferredGenderDropdownField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.traitsAsync,
+  });
+
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+  final AsyncValue<Map<String, List<String>>> traitsAsync;
+
+  @override
+  Widget build(BuildContext context) {
+    final genders = traitsAsync.valueOrNull?['genders'] ?? ['Man', 'Woman', 'Other'];
+    final options = ['Any', ...genders];
+    return _DropdownField(
+      label: label,
+      value: value,
+      options: options,
+      onChanged: onChanged,
     );
   }
 }

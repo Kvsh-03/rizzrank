@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/debug_log.dart';
 import 'firebase_options.dart';
 import 'core/router.dart';
 import 'core/theme/app_theme.dart';
@@ -21,6 +22,9 @@ void main() async {
     'USE_EMULATORS',
     defaultValue: false,
   );
+  // #region agent log
+  debugLog(location: 'main.dart:26', message: 'Firebase init', data: {'useEmulators': useEmulators, 'projectId': DefaultFirebaseOptions.currentPlatform.projectId}, hypothesisId: 'H5');
+  // #endregion
   if (kDebugMode && useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8081);

@@ -1,44 +1,28 @@
 /**
- * Server-side matchmaking via HTTPS callable.
+ * RTDB-based matchmaking: joinQueue and leaveQueue.
  *
- * Flow:
- *   1. Authenticated user calls findMatch with optional lat/lng.
- *   2. Function queries matchmaking queue for opponents within +/-150 ELO.
- *   3. If location provided, prefers opponents that share a 4-char geohash
- *      prefix (~20 km radius). Among nearby candidates one is picked randomly.
- *   4. If opponent found: Firestore transaction deletes both, creates match doc,
- *      creates RTDB active_states/{matchId} initial state.
- *   5. If no opponent: adds caller to queue with expire_at TTL.
- *   6. Returns { matched: boolean, matchId?: string }.
+ * joinQueue: Adds user to RTDB matchmaking_queue/{preference}/{uid}.
+ *   - Rejects if active_match_id is set.
+ *   - Default preferred_gender = opposite of gender (Man->Woman, Woman->Man, Other->Other).
+ *
+ * leaveQueue: Removes user from queue. Uses matchmaking_queue_index/{uid} to find preference.
+ *
+ * Matching is triggered by onQueueWrite in matchmakingMatcher.ts.
  */
 
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { pickRandomTraits } from "./traitData";
-import { getOpeningLine } from "./characters";
-import { Timestamp, FieldValue } from "firebase-admin/firestore";
-import { ServerValue } from "firebase-admin/database";
-import * as ngeohash from "ngeohash";
 
-
-const ELO_RANGE = 150;
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const MATCH_DURATION_MS = 10 * 60 * 1000; // 10 minutes
-const GEOHASH_PRECISION = 12; // full precision stored in queue
-const GEOHASH_PREFIX_LEN = 4; // ~20 km proximity radius
 
-const AI_CHARACTERS = ["luna", "atlas", "zephyr"];
+const PREFERENCES = ["Man", "Woman", "Other", "Any"] as const;
 
-function pickRandomCharacter(): string {
-  return AI_CHARACTERS[Math.floor(Math.random() * AI_CHARACTERS.length)];
+function getDefaultPreferredGender(gender: string | null): string {
+  if (!gender) return "Woman"; // fallback
+  return gender === "Man" ? "Woman" : gender === "Woman" ? "Man" : "Other";
 }
 
-/** Pick a random element from an array. */
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-export const findMatch = onCall(async (request) => {
+export const joinQueue = onCall(async (request) => {
   const db = admin.firestore();
   const rtdb = admin.database();
   if (!request.auth) {
@@ -47,164 +31,58 @@ export const findMatch = onCall(async (request) => {
 
   const uid = request.auth.uid;
 
-  // Extract optional location from request data
-  const reqData = request.data ?? {};
-  const lat = typeof reqData.lat === "number" ? reqData.lat : null;
-  const lng = typeof reqData.lng === "number" ? reqData.lng : null;
-  const myGeohash = lat !== null && lng !== null
-    ? ngeohash.encode(lat, lng, GEOHASH_PRECISION)
-    : null;
-  const myGeoPrefix = myGeohash ? myGeohash.substring(0, GEOHASH_PREFIX_LEN) : null;
-
   const userDoc = await db.doc(`users/${uid}`).get();
   if (!userDoc.exists) {
     throw new HttpsError("not-found", "User profile not found. Create a profile first.");
   }
   const userData = userDoc.data()!;
-  const myElo = (userData.elo_rating as number) ?? 1000;
-  const myDisplayName = (userData.display_name as string) ?? "";
-
-  const minElo = myElo - ELO_RANGE;
-  const maxElo = myElo + ELO_RANGE;
-
-  const result = await db.runTransaction(async (transaction) => {
-    // Query queue ordered by timestamp (FIFO), limited batch for perf
-    const queueSnap = await transaction.get(
-      db.collection("matchmaking").orderBy("timestamp", "asc").limit(50)
-    );
-
-    // Separate candidates into nearby vs any (ELO-compatible, not self)
-    const nearbyCandidates: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-    const allCandidates: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-
-    for (const doc of queueSnap.docs) {
-      if (doc.id === uid) continue;
-      const data = doc.data();
-      const opponentElo = (data.elo_rating as number) ?? 1000;
-      if (opponentElo < minElo || opponentElo > maxElo) continue;
-
-      allCandidates.push(doc);
-
-      // Check proximity if both players have location
-      if (myGeoPrefix && data.geohash) {
-        const opponentPrefix = (data.geohash as string).substring(0, GEOHASH_PREFIX_LEN);
-        if (opponentPrefix === myGeoPrefix) {
-          nearbyCandidates.push(doc);
-        }
-      }
-    }
-
-    // Prefer nearby, fallback to any ELO-compatible, pick randomly
-    let opponentDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-    if (nearbyCandidates.length > 0) {
-      opponentDoc = pickRandom(nearbyCandidates);
-    } else if (allCandidates.length > 0) {
-      opponentDoc = pickRandom(allCandidates);
-    }
-
-    if (!opponentDoc) {
-      // No opponent available — add caller to the matchmaking queue.
-      const expireAt = Date.now() + QUEUE_TTL_MS;
-      const queueEntry: Record<string, unknown> = {
-        uid: uid,
-        display_name: myDisplayName,
-        elo_rating: myElo,
-        timestamp: FieldValue.serverTimestamp(),
-        expire_at: expireAt,
-      };
-      if (myGeohash) {
-        queueEntry.geohash = myGeohash;
-      }
-      transaction.set(db.collection("matchmaking").doc(uid), queueEntry);
-
-      return { matched: false as const };
-    }
-
-    const opponentUid = opponentDoc.id;
-    const opponentData = opponentDoc.data();
-    const opponentElo = (opponentData.elo_rating as number) ?? 1000;
-
-    // Create match document
-    const matchRef = db.collection("matches").doc();
-    const matchId = matchRef.id;
-    const playerIds = [uid, opponentUid];
-    const aiCharacterId = pickRandomCharacter();
-    const expiresAtMs = Date.now() + MATCH_DURATION_MS;
-
-    transaction.set(matchRef, {
-      player_ids: playerIds,
-      winner_id: null,
-      status: "active",
-      target_phrase: "",
-      ai_character_id: aiCharacterId,
-      ai_traits: pickRandomTraits(),
-      elo_change: {},
-      player_elo_before: { [uid]: myElo, [opponentUid]: opponentElo },
-      is_game_over: false,
-      expires_at: Timestamp.fromMillis(expiresAtMs),
-      created_at: FieldValue.serverTimestamp(),
-    });
-
-    // Set active_match_id on both players
-    transaction.update(db.doc(`users/${uid}`), { active_match_id: matchId });
-    transaction.update(db.doc(`users/${opponentUid}`), { active_match_id: matchId });
-
-    // Remove both from queue
-    transaction.delete(db.collection("matchmaking").doc(uid));
-    transaction.delete(db.collection("matchmaking").doc(opponentUid));
-
-    return {
-      matched: true as const,
-      matchId,
-      playerIds,
-      aiCharacterId,
-      expiresAtMs,
-      opponentDisplayName: (opponentData.display_name as string) ?? "",
-    };
-  });
-
-  // If matched, create RTDB active_states (outside transaction -- RTDB is not transactional with Firestore)
-  if (result.matched) {
-    await rtdb.ref(`active_states/${result.matchId}`).set({
-      status: "active",
-      player_ids: result.playerIds,
-      ai_character_id: result.aiCharacterId,
-      target_phrase: "",
-      p1_vibe: 0,
-      p2_vibe: 0,
-      is_typing: null,
-      winner_uid: null,
-      expires_at: result.expiresAtMs,
-      created_at: ServerValue.TIMESTAMP,
-    });
-
-    // FIX 2: Write initial AI greeting to the NEW private player shards
-    const openingLine = getOpeningLine(result.aiCharacterId);
-
-    for (const playerId of result.playerIds) {
-      await db.collection(`matches/${result.matchId}/players/${playerId}/messages`).add({
-        role: "model",
-        content: openingLine,
-        sender_uid: `ai_${result.aiCharacterId}`,
-        timestamp: FieldValue.serverTimestamp(),
-        rizz_delta: null,
-      });
-    }
-
-    return { matched: true, matchId: result.matchId };
+  const activeMatchId = userData.active_match_id as string | null;
+  if (activeMatchId && activeMatchId.length > 0) {
+    throw new HttpsError("failed-precondition", "You already have an active match. Finish it first.");
   }
 
-  return { matched: false };
+  const gender = (userData.gender as string) ?? null;
+  let preferredGender = (userData.preferred_gender as string) ?? null;
+  if (!preferredGender || !PREFERENCES.includes(preferredGender as any)) {
+    preferredGender = getDefaultPreferredGender(gender);
+  }
+
+  const elo = (userData.elo_rating as number) ?? 1000;
+  const displayName = (userData.display_name as string) ?? "";
+
+  const now = Date.now();
+  const expireAt = now + QUEUE_TTL_MS;
+
+  const queueEntry = {
+    elo,
+    display_name: displayName,
+    timestamp: now,
+    expire_at: expireAt,
+  };
+
+  await rtdb.ref(`matchmaking_queue/${preferredGender}/${uid}`).set(queueEntry);
+  await rtdb.ref(`matchmaking_queue_index/${uid}`).set(preferredGender);
+
+  return { success: true, preference: preferredGender };
 });
 
 /**
  * Removes the caller from the matchmaking queue (cancel).
  */
 export const leaveQueue = onCall(async (request) => {
-  const db = admin.firestore();
+  const rtdb = admin.database();
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Must be signed in.");
   }
-  await db.collection("matchmaking").doc(request.auth.uid).delete();
+  const uid = request.auth.uid;
+
+  const indexSnap = await rtdb.ref(`matchmaking_queue_index/${uid}`).get();
+  const preference = indexSnap.val() as string | null;
+
+  if (preference) {
+    await rtdb.ref(`matchmaking_queue/${preference}/${uid}`).remove();
+    await rtdb.ref(`matchmaking_queue_index/${uid}`).remove();
+  }
+
   return { success: true };
 });

@@ -19,13 +19,9 @@
  */
 
 import * as admin from "firebase-admin";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { defineString } from "firebase-functions/params";
-import { getAIResponse, WIN_THRESHOLD } from "./geminiChatService";
-import { scoreMessage, getTimingMult, computeTurnScore } from "./geminiJudge";
-import { getCharacter, AI_CHARACTERS } from "./characters";
+import { AI_CHARACTERS } from "./characters";
 import { finalizeMatch, drawMatch } from "./finalizeMatch";
 
 admin.initializeApp();
@@ -33,21 +29,49 @@ admin.initializeApp();
 const db = admin.firestore();
 const rtdb = admin.database();
 
-const geminiKey = defineString("GEMINI_API_KEY");
+// Re-export matchmaking callables and matcher trigger
+export { joinQueue, leaveQueue } from "./matchmaking";
+export { onQueueWrite } from "./matchmakingMatcher";
 
-// Helper: resolve the API key, falling back to env var or "mock" in emulators
-function resolveApiKey(): string {
-  try {
-    const val = geminiKey.value();
-    if (val && val !== "") return val;
-  } catch {
-    // defineString not available in emulator
+// Re-export RTDB message trigger (replaces Firestore onUserMessageSent)
+export { onRTDBMessageSent } from "./onRTDBMessageSent";
+
+// Re-export presence trigger: when user goes offline, forfeit their active match
+export { onPresenceOffline } from "./onPresenceOffline";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Forfeit: caller voluntarily ends match; opponent wins.
+// ─────────────────────────────────────────────────────────────────────────────
+export const forfeitMatch = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in to forfeit.");
   }
-  return process.env.GEMINI_API_KEY || "mock";
-}
+  const matchId = request.data?.matchId as string | undefined;
+  if (!matchId || typeof matchId !== "string") {
+    throw new HttpsError("invalid-argument", "matchId is required.");
+  }
 
-// Re-export matchmaking callables
-export { findMatch, leaveQueue } from "./matchmaking";
+  const callerUid = request.auth.uid;
+  const matchDoc = await db.doc(`matches/${matchId}`).get();
+  if (!matchDoc.exists) {
+    throw new HttpsError("not-found", "Match not found.");
+  }
+  const matchData = matchDoc.data()!;
+  if (matchData.status !== "active") {
+    throw new HttpsError("failed-precondition", "Match is no longer active.");
+  }
+  const playerIds: string[] = matchData.player_ids || [];
+  if (!playerIds.includes(callerUid)) {
+    throw new HttpsError("permission-denied", "You are not in this match.");
+  }
+  const opponentUid = playerIds.find((id) => id !== callerUid);
+  if (!opponentUid) {
+    throw new HttpsError("internal", "Could not determine opponent.");
+  }
+
+  await finalizeMatch({ matchId, winnerUid: opponentUid, playerIds });
+  return { success: true };
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // One-time seed: seedAiModels callable. Invoke once to populate ai_models.
@@ -67,6 +91,7 @@ export const seedAiModels = onCall(async (request) => {
       role: char.role,
       avatar_url: char.avatar,
       difficulty: char.difficulty,
+      gender: char.gender,
     });
   }
   await batch.commit();
@@ -74,233 +99,21 @@ export const seedAiModels = onCall(async (request) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: load AI character from Firestore ai_models, falling back to hardcoded
+// One-time seed: seedTraits callable. Populates traits/{category} with values.
 // ─────────────────────────────────────────────────────────────────────────────
-interface AICharacterConfig {
-  systemInstruction: string;
-  description: string;
-}
-
-async function loadCharacter(characterId: string): Promise<AICharacterConfig> {
-  const doc = await db.doc(`ai_models/${characterId}`).get();
-  if (doc.exists) {
-    const data = doc.data()!;
-    return {
-      systemInstruction: (data.system_prompt as string) ?? "",
-      description: (data.personality_summary as string) ?? "",
-    };
+export const seedTraits = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in to seed.");
   }
-  const fallback = getCharacter(characterId);
-  return {
-    systemInstruction: fallback.systemInstruction,
-    description: fallback.description,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Firestore trigger: matches/{matchId}/chat/{messageId}
-// Fires when any new message is added to the chat subcollection.
-// Only processes messages where role === "user".
-// ─────────────────────────────────────────────────────────────────────────────
-export const onUserMessageSent = onDocumentCreated(
-  "matches/{matchId}/players/{playerId}/messages/{messageId}",
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-
-    const data = snap.data();
-    if (!data || data.role !== "user") return;
-
-    const matchId = event.params.matchId;
-    const playerId = event.params.playerId;
-    const messageId = event.params.messageId;
-    const senderUid = (data.sender_uid as string) || playerId;
-    const userText = (data.content as string) || (data.text as string) || "";
-
-    if (!userText) {
-      console.warn(`Missing content on ${matchId}/players/${playerId}/messages/${messageId}`);
-      return;
-    }
-
-    // ── Read match metadata ──────────────────────────────────────────────
-    const matchDoc = await db.doc(`matches/${matchId}`).get();
-    if (!matchDoc.exists) {
-      console.error(`Match ${matchId} not found`);
-      return;
-    }
-    const matchData = matchDoc.data()!;
-    if (matchData.status !== "active") {
-      console.warn(`Match ${matchId} status is '${matchData.status}', ignoring message`);
-      return;
-    }
-    const characterId = (matchData.ai_character_id as string) || "luna";
-    const playerIds: string[] = matchData.player_ids || [];
-    const aiTraits: Record<string, string> =
-      (matchData.ai_traits as Record<string, string>) ?? {};
-
-    const playerIndex = playerIds.indexOf(playerId);
-    if (playerIndex === -1) {
-      console.error(`Player ${playerId} not in match ${matchId} players`);
-      return;
-    }
-    const vibeKey = playerIndex === 0 ? "p1_vibe" : "p2_vibe";
-
-    // ── Load AI character config ─────────────────────────────────────────
-    const charConfig = await loadCharacter(characterId);
-
-    // ── Read current vibe from RTDB ──────────────────────────────────────
-    const vibeRef = rtdb.ref(`active_states/${matchId}/${vibeKey}`);
-    const vibeSnap = await vibeRef.get();
-    const currentVibe: number = vibeSnap.val() ?? 0;
-
-    // ── Build chat history from player's private shard ──────────────────
-    const chatSnap = await db
-      .collection(`matches/${matchId}/players/${playerId}/messages`)
-      .orderBy("timestamp", "asc")
-      .get();
-
-    interface MergedMsg { role: string; text: string; _ts: number }
-    const allDocs: MergedMsg[] = chatSnap.docs
-      .map((d) => {
-        const dd = d.data();
-        return {
-          role: (dd.role as string) || "user",
-          text: (dd.content as string) || (dd.text as string) || "",
-          _ts: dd.timestamp?.toMillis?.() ?? 0,
-        };
-      })
-      .sort((a, b) => a._ts - b._ts);
-
-    const history = allDocs.map((d) => ({
-      role: d.role as "user" | "model",
-      text: d.text,
-    }));
-
-    const lastAIMsg =
-      [...allDocs].reverse().find((d) => d.role === "model")?.text ?? "";
-
-    // ── Compute response time for timing multiplier ──────────────────────
-    const lastAITimestamp = [...allDocs]
-      .reverse()
-      .find((d) => d.role === "model")?._ts ?? 0;
-    const userMsgTimestamp = data.timestamp?.toMillis?.() ?? Date.now();
-    const responseTimeSec = lastAITimestamp > 0
-      ? (userMsgTimestamp - lastAITimestamp) / 1000
-      : 4.0; // Default to sweet spot for the first message
-
-    // ── Set AI typing indicator in RTDB ──────────────────────────────────
-    const typingRef = rtdb.ref(`active_states/${matchId}/is_typing/ai_${playerId}`);
-    await typingRef.set(true);
-
-    const apiKey = resolveApiKey();
-
-    try {
-      // ── Get AI response via Gemini ─────────────────────────────────────
-      let aiResult;
-      let scoringResult;
-      let turnResult;
-      let aiError = false;
-
-      try {
-        aiResult = await getAIResponse(
-          apiKey, characterId, history, currentVibe, aiTraits, charConfig.systemInstruction
-        );
-
-        // ── Score the user message via Gemini Judge ────────────────────────
-        scoringResult = await scoreMessage(
-          apiKey, characterId, lastAIMsg, userText, aiTraits
-        );
-      } catch (error) {
-        console.error(`[${matchId}] Gemini API Error:`, error);
-        aiError = true;
-        // Graceful fallback if Gemini API fails (e.g., invalid key, quota exceeded)
-        aiResult = {
-          text: "[System: AI is currently unavailable or the API key is invalid.]",
-          isDateAsk: false,
-        };
-        scoringResult = {
-          baseGood: 5, // Neutral score
-          baseBad: 0,
-          personaMult: 1.0,
-          reasoning: "Fallback score due to AI generation error.",
-        };
-      }
-
-      // ── Apply Turn Score formula ───────────────────────────────────────
-      const timingMult = getTimingMult(responseTimeSec);
-      turnResult = computeTurnScore(scoringResult, timingMult);
-
-      // ── Write AI reply to player's private shard ───────────────────────
-      await db.collection(`matches/${matchId}/players/${playerId}/messages`).add({
-        role: "model",
-        content: aiResult.text,
-        sender_uid: `ai_${characterId}`,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        rizz_delta: aiError ? 0 : null, // Indicate error in rizz_delta if needed
-      });
-
-      // ── Update vibe in RTDB via transaction (atomic increment) ─────────
-      let updatedVibe = currentVibe;
-      if (!aiError) {
-        const newVibe = await vibeRef.transaction((current: number | null) => {
-          return (current ?? 0) + turnResult.turnScore;
-        });
-        updatedVibe = (newVibe.snapshot.val() as number) ?? currentVibe + turnResult.turnScore;
-      }
-
-      // ── Write scoring breakdown back onto the original user message ────
-      await snap.ref.update({
-        rizz_delta: aiError ? 0 : turnResult.turnScore,
-        scoring: {
-          base_good: turnResult.baseGood,
-          base_bad: turnResult.baseBad,
-          persona_mult: turnResult.personaMult,
-          timing_mult: turnResult.timingMult,
-          reasoning: turnResult.reasoning,
-        },
-      });
-
-      console.log(
-        `[${matchId}] ${playerId} (${vibeKey}): ` +
-        `+${aiError ? 0 : turnResult.turnScore} rizz (good=${turnResult.baseGood} ×persona=${turnResult.personaMult} ` +
-        `×timing=${turnResult.timingMult} −bad=${turnResult.baseBad}) ` +
-        `→ ${updatedVibe} total` +
-        (aiResult.isDateAsk ? " ★ DATE ASK DETECTED" : "")
-      );
-
-      // ── Win detection: if AI asked for a date, finalize the match ──────
-      if (!aiError && aiResult.isDateAsk && updatedVibe > WIN_THRESHOLD) {
-        console.log(`[${matchId}] WINNER: ${playerId}`);
-        await finalizeMatch({ matchId, winnerUid: playerId, playerIds });
-      }
-    } finally {
-      // ── Always clear the AI typing indicator ───────────────────────────
-      await typingRef.remove();
-    }
-  }
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Scheduled: cleanup expired matchmaking entries every 5 minutes
-// ─────────────────────────────────────────────────────────────────────────────
-export const cleanupExpiredMatchmaking = onSchedule("every 5 minutes", async () => {
-  const now = Date.now();
-  const expired = await db
-    .collection("matchmaking")
-    .where("expire_at", "<", now)
-    .get();
-
-  if (expired.empty) {
-    console.log("[cleanup] No expired matchmaking entries");
-    return;
-  }
-
+  const { TRAIT_DATA } = await import("./traitData");
   const batch = db.batch();
-  for (const doc of expired.docs) {
-    batch.delete(doc.ref);
+  const categories = Object.keys(TRAIT_DATA);
+  for (const category of categories) {
+    const ref = db.collection("traits").doc(category);
+    batch.set(ref, { values: TRAIT_DATA[category] });
   }
   await batch.commit();
-  console.log(`[cleanup] Removed ${expired.size} expired matchmaking entries`);
+  return { success: true, count: categories.length };
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

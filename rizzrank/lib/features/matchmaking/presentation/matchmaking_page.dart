@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/models/firestore_match_model.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -17,12 +15,12 @@ class MatchmakingPage extends ConsumerStatefulWidget {
 }
 
 class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _spinnerController;
   late AnimationController _pulseController;
   int _waitTimer = 0;
   Timer? _countdownTimer;
-  StreamSubscription<FirestoreMatch?>? _matchSub;
+  StreamSubscription<String?>? _matchSub;
   Timer? _matchTimeout;
   bool _searching = true;
   String? _errorMessage;
@@ -30,6 +28,7 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _spinnerController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -49,29 +48,22 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
     WidgetsBinding.instance.addPostFrameCallback((_) => _startMatchmaking());
   }
 
-  /// Attempt to get the device's current location.
-  /// Returns null if permissions are denied or unavailable.
-  Future<Position?> _getLocation() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return null;
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return null;
-      }
-      if (permission == LocationPermission.deniedForever) return null;
-
-      return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: Duration(seconds: 5),
-        ),
-      );
-    } catch (_) {
-      return null;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Only leave on paused/detached. Do NOT leave on inactive - that fires when
+    // switching windows (e.g. multi-window testing), which would remove the user
+    // from the queue before another user can join.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _leaveQueueOnBackground();
     }
+  }
+
+  Future<void> _leaveQueueOnBackground() async {
+    if (!_searching) return;
+    try {
+      await ref.read(matchmakingServiceProvider).leaveQueue();
+    } catch (_) {}
   }
 
   Future<void> _startMatchmaking() async {
@@ -85,37 +77,30 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
       return;
     }
 
-    try {
-      // Get device location for proximity matching (graceful fallback if unavailable)
-      final position = await _getLocation();
+    final user = ref.read(currentUserProvider).value;
+    final activeMatchId = user?.activeMatchId;
+    if (activeMatchId != null && activeMatchId.isNotEmpty) {
+      if (mounted) context.go('/chat/$activeMatchId');
+      return;
+    }
 
-      final match = await matchmakingService.findMatch(
-        lat: position?.latitude,
-        lng: position?.longitude,
-      );
+    try {
+      await matchmakingService.joinQueue();
 
       if (!mounted) return;
 
-      if (match != null && match.matchId.isNotEmpty) {
-        _navigateToMatch(match.matchId);
-        return;
-      }
-
-      // Queued -- listen for pairing by another player
-      _matchSub = matchmakingService.watchForMatch(authUser.uid).listen((
-        match,
+      _matchSub = matchmakingService.watchMatchResult(authUser.uid).listen((
+        matchId,
       ) {
-        if (match != null &&
-            match.matchId.isNotEmpty &&
-            match.status == 'active') {
-          _navigateToMatch(match.matchId);
+        if (matchId != null && matchId.isNotEmpty) {
+          _navigateToMatch(matchId);
         }
       });
 
-      // Matchmaking timeout after 2 minutes
       _matchTimeout = Timer(const Duration(minutes: 2), () {
         if (mounted && _searching) {
           _matchSub?.cancel();
+          _leaveQueueOnBackground();
           setState(() {
             _errorMessage = 'No opponents found. Try again later.';
             _searching = false;
@@ -149,6 +134,7 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _spinnerController.dispose();
     _pulseController.dispose();
     _countdownTimer?.cancel();
@@ -221,7 +207,6 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
                         child: const Text('Retry'),
                       ),
                     ] else ...[
-                      // Animated spinner
                       SizedBox(
                         width: 192,
                         height: 192,
@@ -285,7 +270,6 @@ class _MatchmakingPageState extends ConsumerState<MatchmakingPage>
 
                       const SizedBox(height: 48),
 
-                      // Opponent Card with pulsing dots
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
