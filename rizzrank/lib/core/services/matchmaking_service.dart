@@ -11,17 +11,23 @@ class MatchmakingService {
   MatchmakingService({
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instance;
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
 
   /// Calls the server-side findMatch callable.
   /// Returns a [FirestoreMatch] if immediately matched, or null if queued.
-  Future<FirestoreMatch?> findMatch() async {
+  /// If [lat] and [lng] are provided, the server will prefer nearby opponents.
+  Future<FirestoreMatch?> findMatch({double? lat, double? lng}) async {
     final callable = _functions.httpsCallable('findMatch');
-    final result = await callable.call<Map<String, dynamic>>();
+    final requestData = <String, dynamic>{};
+    if (lat != null && lng != null) {
+      requestData['lat'] = lat;
+      requestData['lng'] = lng;
+    }
+    final result = await callable.call<Map<String, dynamic>>(requestData);
 
     final data = result.data;
     if (data['matched'] == true && data['matchId'] != null) {
@@ -54,8 +60,8 @@ class MatchmakingService {
         .limit(1)
         .snapshots()
         .map((snap) {
-      if (snap.docs.isEmpty) return null;
-      return FirestoreMatch.fromFirestore(snap.docs.first);
-    });
+          if (snap.docs.isEmpty) return null;
+          return FirestoreMatch.fromFirestore(snap.docs.first);
+        });
   }
 }

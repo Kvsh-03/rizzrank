@@ -13,16 +13,21 @@ import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Use emulators when running in debug mode with USE_EMULATORS=true
   // Run: flutter run --dart-define=USE_EMULATORS=true
-  const useEmulators = bool.fromEnvironment('USE_EMULATORS', defaultValue: false);
+  const useEmulators = bool.fromEnvironment(
+    'USE_EMULATORS',
+    defaultValue: false,
+  );
   if (kDebugMode && useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8081);
+    // Disable persistence for emulators to avoid LevelDB LOCK issues during multi-instance testing
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: false,
+    );
     FirebaseDatabase.instance.useDatabaseEmulator('localhost', 9001);
     FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
   }
@@ -36,7 +41,7 @@ class RizzRankApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-    
+
     return MaterialApp.router(
       title: 'RizzRank',
       theme: AppTheme.darkTheme,
