@@ -73,39 +73,22 @@ class LandingPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 40),
 
-                  // Buttons row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () => context.go('/login'),
-                        icon: const Icon(LucideIcons.play, size: 24),
-                        label: const Text('Play Now'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          shadowColor: AppTheme.primary.withOpacity(0.5),
-                          elevation: 12,
-                        ),
+                  // Play Now button
+                  Center(
+                    child: ElevatedButton.icon(
+                      onPressed: () => context.go('/login'),
+                      icon: const Icon(LucideIcons.play, size: 24),
+                      label: const Text('Play Now'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shadowColor: AppTheme.primary.withOpacity(0.5),
+                        elevation: 12,
                       ),
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(LucideIcons.info, size: 24),
-                        label: const Text('How It Works'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: BorderSide(color: AppTheme.primary.withOpacity(0.3)),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          backgroundColor: Colors.white.withOpacity(0.05),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                   const SizedBox(height: 48),
 
