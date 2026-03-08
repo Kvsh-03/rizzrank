@@ -178,7 +178,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: InkWell(
-                  onTap: () => context.go('/dashboard'),
+                  onTap: () => context.go('/results/defeat/${widget.matchId}'),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -187,18 +187,18 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      color: Colors.greenAccent.withOpacity(0.2),
+                      color: Colors.redAccent.withOpacity(0.2),
                       border: Border.all(
-                        color: Colors.greenAccent.withOpacity(0.4),
+                        color: Colors.redAccent.withOpacity(0.4),
                       ),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'FINISH',
+                          'FORFEIT',
                           style: TextStyle(
-                            color: Colors.greenAccent,
+                            color: Colors.redAccent,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -206,7 +206,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                         SizedBox(width: 4),
                         Icon(
                           LucideIcons.trophy,
-                          color: Colors.greenAccent,
+                          color: Colors.redAccent,
                           size: 16,
                         ),
                       ],

@@ -14,6 +14,14 @@ class DashboardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
 
+    // Reconnect to active match if one exists
+    ref.listen<AsyncValue<String?>>(activeMatchCheckProvider, (prev, next) {
+      final matchId = next.value;
+      if (matchId != null && matchId.isNotEmpty) {
+        context.go('/chat/$matchId');
+      }
+    });
+
     return Scaffold(
       body: userAsync.when(
         data: (user) {

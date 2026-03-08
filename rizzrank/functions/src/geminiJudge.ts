@@ -10,7 +10,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getCharacter } from "./characters";
 
-const SCORING_MODEL = "gemini-1.5-flash";
+const SCORING_MODEL = "gemini-3.1-flash-lite-preview";
 
 export interface ScoringResult {
   baseGood: number;
@@ -70,14 +70,18 @@ function clamp(value: number, min: number, max: number): number {
 
 /**
  * Computes the timing multiplier based on response time.
- * - <3s: 0.5x (too fast = needy)
- * - 3-5s: 1/(x-2) curve (sweet spot, peaks at 3s)
- * - >5s: 1.0x (neutral)
+ * - <2s: 0.5x (too fast = needy/desperate)
+ * - 2-3s: ramp from 0.5x to 1.0x
+ * - 3-8s: 1.0x (sweet spot)
+ * - 8-15s: ramp from 1.0x to 0.7x
+ * - >15s: 0.7x (lost interest / distracted)
  */
 export function getTimingMult(responseTimeSeconds: number): number {
-  if (responseTimeSeconds < 3) return 0.5;
-  if (responseTimeSeconds <= 5) return 1 / (responseTimeSeconds - 2);
-  return 1.0;
+  if (responseTimeSeconds < 2) return 0.5;
+  if (responseTimeSeconds < 3) return 0.5 + 0.5 * (responseTimeSeconds - 2);
+  if (responseTimeSeconds <= 8) return 1.0;
+  if (responseTimeSeconds <= 15) return 1.0 - 0.3 * ((responseTimeSeconds - 8) / 7);
+  return 0.7;
 }
 
 /**

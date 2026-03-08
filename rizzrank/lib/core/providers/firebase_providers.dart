@@ -60,6 +60,27 @@ final aiModelsProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>(
     );
   },
 );
+/// Checks if the current user has an active match to reconnect to.
+final activeMatchCheckProvider = FutureProvider<String?>((ref) async {
+  final authUser = ref.watch(authStateProvider).value;
+  if (authUser == null) return null;
+  final dbService = ref.watch(databaseServiceProvider);
+  return dbService.getActiveMatchId(authUser.uid);
+});
+
+/// Top players for leaderboard, ordered by ELO descending.
+final leaderboardProvider = StreamProvider.autoDispose<List<AppUser>>((ref) {
+  final firestore = ref.watch(firestoreProvider);
+  return firestore
+      .collection('users')
+      .orderBy('elo_rating', descending: true)
+      .limit(50)
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((doc) => AppUser.fromFirestore(doc))
+          .toList());
+});
+
 final matchHistoryProvider = StreamProvider.autoDispose<List<FirestoreMatch>>((
   ref,
 ) {
