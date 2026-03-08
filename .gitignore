@@ -1,0 +1,5 @@
+# Firebase secrets (never commit)
+rizzrank/functions/serviceAccountKey.json
+rizzrank/functions/.env
+rizzrank/functions/.env.*
+rizzrank/functions/.env.local
