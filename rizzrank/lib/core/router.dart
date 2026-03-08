@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'providers/firebase_providers.dart';
 import 'widgets/app_shell.dart';
-import '../features/auth/presentation/landing_page.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
 import '../features/matchmaking/presentation/matchmaking_page.dart';
@@ -48,15 +47,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
 
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: '/login',
     refreshListenable: authNotifier,
     redirect: (context, state) {
       final isAuth = auth.currentUser != null;
-      final isGoingToLogin =
-          state.matchedLocation == '/login' || state.matchedLocation == '/';
+      final isGoingToLogin = state.matchedLocation == '/login' || state.matchedLocation == '/';
 
       if (!isAuth && !isGoingToLogin) {
-        return '/';
+        return '/login';
       }
 
       if (isAuth && isGoingToLogin) {
@@ -68,7 +66,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => const LandingPage(),
+        redirect: (_, __) => '/login',
       ),
       GoRoute(
         path: '/login',
