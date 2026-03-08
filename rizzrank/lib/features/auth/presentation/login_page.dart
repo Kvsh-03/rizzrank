@@ -37,20 +37,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // Background glow
-          Center(
-            child: Container(
-              width: 500,
-              height: 500,
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Center(
+      body: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: ConstrainedBox(
@@ -124,8 +111,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
             ),
           ),
-        ],
-      ),
     );
   }
 }
