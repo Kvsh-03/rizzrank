@@ -2,17 +2,33 @@
 // Run `flutterfire configure` to replace these placeholders with your Firebase project config.
 // ignore_for_file: lines_longer_than_80_chars, avoid_classes_with_only_static_members
 
-//I'm editting the file
-import 'dart:io' show Platform;
-
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    if (Platform.isMacOS) return macos;
-    if (Platform.isIOS) return ios;
-    return android;
+    if (kIsWeb) return web;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return android;
+      case TargetPlatform.iOS:
+        return ios;
+      case TargetPlatform.macOS:
+        return macos;
+      default:
+        return android;
+    }
   }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyD22vLRdxm78bR91QRAHYyRdZLDXSPZ0Tg',
+    appId: '1:371372966416:web:placeholder',
+    messagingSenderId: '371372966416',
+    projectId: 'rizzrank-f52cd',
+    authDomain: 'rizzrank-f52cd.firebaseapp.com',
+    databaseURL: 'https://rizzrank-f52cd-default-rtdb.firebaseio.com',
+    storageBucket: 'rizzrank-f52cd.firebasestorage.app',
+  );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyD22vLRdxm78bR91QRAHYyRdZLDXSPZ0Tg',

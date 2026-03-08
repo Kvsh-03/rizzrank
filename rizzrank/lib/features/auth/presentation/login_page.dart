@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,36 +14,24 @@ class LoginPage extends ConsumerStatefulWidget {
 }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
-  final _nameController = TextEditingController();
   bool _isLoading = false;
 
-  Future<void> _handleLogin() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) return;
-
-    debugPrint('[LoginPage] _handleLogin called with name="$name"');
+  Future<void> _handleGoogleSignIn() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
       final authService = ref.read(authServiceProvider);
-      await authService.signInAnonymously(name);
-      debugPrint('[LoginPage] Sign-in succeeded, navigating to /dashboard');
+      await authService.signInWithGoogle();
       if (mounted) context.go('/dashboard');
-    } catch (e, stack) {
-      debugPrint('[LoginPage] Login failed: $e\n$stack');
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: $e')),
+          SnackBar(content: Text('Sign in failed: $e')),
         );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
   }
 
   @override
@@ -104,149 +91,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Username field
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 4, bottom: 6),
-                          child: Text(
-                            'Username',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.7),
-                            ),
-                          ),
-                        ),
-                      ),
-                      TextField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          hintText: 'your_handle',
-                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
-                          prefixIcon: Icon(LucideIcons.user, color: Colors.white.withOpacity(0.4), size: 20),
-                          filled: true,
-                          fillColor: Colors.transparent,
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: AppTheme.primary, width: 2),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                        onSubmitted: (_) => _handleLogin(),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Sign In button
+                      // Google Sign In button
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: AppTheme.primary.withOpacity(0.5),
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            elevation: 4,
-                            shadowColor: AppTheme.primary.withOpacity(0.3),
-                          ),
-                          child: _isLoading
+                        child: OutlinedButton.icon(
+                          onPressed: _isLoading ? null : _handleGoogleSignIn,
+                          icon: _isLoading
                               ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
                                 )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                                    SizedBox(width: 8),
-                                    Icon(LucideIcons.arrowRight, size: 20),
-                                  ],
-                                ),
+                              : const Icon(LucideIcons.chrome, size: 20, color: Colors.white),
+                          label: Text(
+                            _isLoading ? 'Signing in…' : 'Continue with Google',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Divider
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'OR CONTINUE WITH',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2,
-                                color: Colors.white.withOpacity(0.3),
-                              ),
-                            ),
-                          ),
-                          Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Social login buttons (decorative)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {},
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: BorderSide(color: Colors.white.withOpacity(0.15)),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              child: const Text('Google', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {},
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: BorderSide(color: Colors.white.withOpacity(0.15)),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              child: const Text('Apple', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Sign up link
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            "Don't have an account?",
-                            style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.4)),
-                          ),
-                          TextButton(
-                            onPressed: () {},
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.primary,
-                              padding: const EdgeInsets.only(left: 4),
-                            ),
-                            child: const Text(
-                              'Sign Up',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
