@@ -1,4 +1,4 @@
-# rizzrank
+# RizzRank
 
 🏁 RizzRank: The AI Dating Duel
 
