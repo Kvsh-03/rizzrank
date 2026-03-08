@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +26,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   bool _isLoading = false;
+  Timer? _typingDebounce;
 
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
@@ -37,6 +39,23 @@ class _BattlePageState extends ConsumerState<BattlePage> {
     });
   }
 
+  void _onTextChanged(String text) {
+    final user = ref.read(currentUserProvider).value;
+    if (user == null) return;
+
+    final dbService = ref.read(databaseServiceProvider);
+    _typingDebounce?.cancel();
+
+    if (text.isNotEmpty) {
+      dbService.setTypingIndicator(widget.matchId, user.uid);
+      _typingDebounce = Timer(const Duration(seconds: 2), () {
+        dbService.setTypingIndicator(widget.matchId, null);
+      });
+    } else {
+      dbService.setTypingIndicator(widget.matchId, null);
+    }
+  }
+
   Future<void> _sendMessage(String uid) async {
     final text = _textController.text.trim();
     if (text.isEmpty || _isLoading) return;
@@ -46,18 +65,23 @@ class _BattlePageState extends ConsumerState<BattlePage> {
       _textController.clear();
     });
 
+    // Clear typing indicator
+    ref.read(databaseServiceProvider).setTypingIndicator(widget.matchId, null);
+    _typingDebounce?.cancel();
+
     try {
       final firestore = ref.read(firestoreProvider);
       await firestore.collection('matches/${widget.matchId}/chat').add({
         'role': 'user',
-        'text': text,
+        'content': text,
         'sender_uid': uid,
         'timestamp': FieldValue.serverTimestamp(),
       });
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -66,6 +90,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
 
   @override
   void dispose() {
+    _typingDebounce?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -74,28 +99,37 @@ class _BattlePageState extends ConsumerState<BattlePage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).value;
-    if (user == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (user == null) {
+      return const Scaffold(
+          body: Center(child: CircularProgressIndicator()));
+    }
 
     final liveMatchAsync = ref.watch(liveMatchStreamProvider(widget.matchId));
-    final messagesAsync = ref.watch(messagesStreamProvider((matchId: widget.matchId, uid: user.uid)));
+    final messagesAsync = ref.watch(
+        messagesStreamProvider((matchId: widget.matchId, uid: user.uid)));
 
-    // Listen for match completion to navigate
-    ref.listen(firestoreMatchStreamProvider(widget.matchId), (prev, next) {
-      final match = next.value;
-      if (match != null && match.status == 'completed' && match.winnerId != null) {
-        final outcome = match.winnerId == user.uid ? 'victory' : 'defeat';
+    // Navigate to results when match completes
+    ref.listen(liveMatchStreamProvider(widget.matchId), (prev, next) {
+      final state = next.value;
+      if (state != null && state.isCompleted && state.winnerUid != null) {
+        final outcome = state.winnerUid == user.uid ? 'victory' : 'defeat';
         context.go('/results/$outcome/${widget.matchId}');
       }
     });
 
     return liveMatchAsync.when(
       data: (liveMatch) {
-        if (liveMatch == null) return const Scaffold(body: Center(child: Text('Match not found')));
+        if (liveMatch == null) {
+          return const Scaffold(
+              body: Center(child: Text('Match not found')));
+        }
 
         final aiChar = getCharacterById(liveMatch.aiCharacterId);
-        final myState = liveMatch.players[user.uid];
+        final myVibe = liveMatch.vibeFor(user.uid);
         final opponentUid = liveMatch.getOpponentUid(user.uid);
-        final opponentState = opponentUid != null ? liveMatch.players[opponentUid] : null;
+        final opponentVibe =
+            opponentUid != null ? liveMatch.vibeFor(opponentUid) : 0;
+        final isTypingUid = liveMatch.isTyping;
 
         return Scaffold(
           backgroundColor: AppTheme.backgroundDark,
@@ -106,31 +140,43 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: AppTheme.primary.withOpacity(0.1),
-                  border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                  border:
+                      Border.all(color: AppTheme.primary.withOpacity(0.2)),
                 ),
-                child: const Icon(LucideIcons.menu, color: AppTheme.primary, size: 20),
+                child: const Icon(LucideIcons.menu,
+                    color: AppTheme.primary, size: 20),
               ),
             ),
-            title: const Text('RizzRank', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+            title: const Text('RizzRank',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, letterSpacing: -0.5)),
             actions: [
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: InkWell(
                   onTap: () => context.go('/dashboard'),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       color: Colors.greenAccent.withOpacity(0.2),
-                      border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                      border: Border.all(
+                          color: Colors.greenAccent.withOpacity(0.4)),
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text('FINISH', style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                      children: [
+                        Text('FINISH',
+                            style: TextStyle(
+                                color: Colors.greenAccent,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold)),
                         SizedBox(width: 4),
-                        Icon(LucideIcons.trophy, color: Colors.greenAccent, size: 16),
+                        Icon(LucideIcons.trophy,
+                            color: Colors.greenAccent, size: 16),
                       ],
                     ),
                   ),
@@ -141,19 +187,21 @@ class _BattlePageState extends ConsumerState<BattlePage> {
           ),
           body: Column(
             children: [
-              // AI Profile Header with gradient glow
+              // AI Profile Header
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [AppTheme.primary.withOpacity(0.1), Colors.transparent],
+                    colors: [
+                      AppTheme.primary.withOpacity(0.1),
+                      Colors.transparent
+                    ],
                   ),
                 ),
                 child: Column(
                   children: [
-                    // Avatar with gradient glow ring
                     Stack(
                       alignment: Alignment.bottomRight,
                       children: [
@@ -178,7 +226,9 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                             height: 104,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppTheme.primary.withOpacity(0.5), width: 2),
+                              border: Border.all(
+                                  color: AppTheme.primary.withOpacity(0.5),
+                                  width: 2),
                             ),
                             child: ClipOval(
                               child: Image.network(
@@ -186,7 +236,8 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Container(
                                   color: Colors.grey[800],
-                                  child: const Icon(LucideIcons.user, color: Colors.white54, size: 40),
+                                  child: const Icon(LucideIcons.user,
+                                      color: Colors.white54, size: 40),
                                 ),
                               ),
                             ),
@@ -201,28 +252,33 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                             decoration: BoxDecoration(
                               color: Colors.greenAccent,
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppTheme.backgroundDark, width: 3),
+                              border: Border.all(
+                                  color: AppTheme.backgroundDark, width: 3),
                             ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(aiChar.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(aiChar.name,
+                        style: const TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text(
                       '${aiChar.role} \u2022 "${aiChar.description.split('.').first}"',
-                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.5), fontSize: 13),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
-                    // Personality tags
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _PersonalityTag(label: 'Cinephile', color: AppTheme.primary),
+                        _PersonalityTag(
+                            label: 'Cinephile', color: AppTheme.primary),
                         const SizedBox(width: 8),
-                        _PersonalityTag(label: 'Night Owl', color: Colors.pinkAccent),
+                        _PersonalityTag(
+                            label: 'Night Owl', color: Colors.pinkAccent),
                       ],
                     ),
                   ],
@@ -234,10 +290,10 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Column(
                   children: [
-                    HeartMeter(score: myState?.rizzScore ?? 0),
+                    HeartMeter(score: myVibe),
                     const SizedBox(height: 12),
-                    if (opponentState != null)
-                      OpponentGhost(opponentScore: opponentState.rizzScore),
+                    if (opponentUid != null)
+                      OpponentGhost(opponentScore: opponentVibe),
                   ],
                 ),
               ),
@@ -246,19 +302,7 @@ class _BattlePageState extends ConsumerState<BattlePage> {
               Expanded(
                 child: messagesAsync.when(
                   data: (messages) {
-                    // Filter messages for my conversation lane
-                    final myMessages = messages.where((m) {
-                      // user messages sent by me, or AI messages targeted to me
-                      // Assuming backend adds 'target_uid' or similar. 
-                      // Wait, the new CF index says "all messages in player's path" - ah! 
-                      // We modified backend to use a single subcollection `matches/{matchId}/chat`.
-                      // In index.ts, it filters by sender_uid == uid or target_uid == uid.
-                      // Let's filter locally to ensure we only show our lane.
-                      return true; // We will handle exact filtering below
-                    }).toList();
-
-                    // Reverse for ListView auto-scroll behavior
-                    final reversedMessages = myMessages.reversed.toList();
+                    final reversedMessages = messages.reversed.toList();
 
                     return ListView.builder(
                       controller: _scrollController,
@@ -274,17 +318,43 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                       },
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('Error: $e')),
                 ),
               ),
 
-              // Input Bar with wand button
+              // Typing indicator
+              if (isTypingUid != null && isTypingUid != user.uid)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white38),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Opponent is typing...',
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.4),
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic)),
+                    ],
+                  ),
+                ),
+
+              // Input Bar
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppTheme.backgroundDark.withOpacity(0.95),
-                  border: Border(top: BorderSide(color: AppTheme.primary.withOpacity(0.2))),
+                  border: Border(
+                      top: BorderSide(
+                          color: AppTheme.primary.withOpacity(0.2))),
                 ),
                 child: SafeArea(
                   child: Row(
@@ -295,22 +365,33 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                           children: [
                             TextField(
                               controller: _textController,
+                              onChanged: _onTextChanged,
                               decoration: InputDecoration(
                                 hintText: 'Type your smooth response...',
-                                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                                hintStyle: TextStyle(
+                                    color: Colors.white.withOpacity(0.3)),
                                 filled: true,
-                                fillColor: Colors.grey[850]?.withOpacity(0.5) ?? Colors.white.withOpacity(0.08),
+                                fillColor:
+                                    Colors.grey[850]?.withOpacity(0.5) ??
+                                        Colors.white.withOpacity(0.08),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide(color: AppTheme.primary.withOpacity(0.3)),
+                                  borderSide: BorderSide(
+                                      color:
+                                          AppTheme.primary.withOpacity(0.3)),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide(color: AppTheme.primary.withOpacity(0.5), width: 2),
+                                  borderSide: BorderSide(
+                                      color:
+                                          AppTheme.primary.withOpacity(0.5),
+                                      width: 2),
                                 ),
-                                contentPadding: const EdgeInsets.fromLTRB(20, 14, 48, 14),
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                    20, 14, 48, 14),
                               ),
-                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
                               onSubmitted: (_) => _sendMessage(user.uid),
                             ),
                             Positioned(
@@ -324,7 +405,15 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                                     color: AppTheme.primary,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(LucideIcons.send, color: Colors.white, size: 18),
+                                  child: _isLoading
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(8),
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white),
+                                        )
+                                      : const Icon(LucideIcons.send,
+                                          color: Colors.white, size: 18),
                                 ),
                               ),
                             ),
@@ -338,9 +427,11 @@ class _BattlePageState extends ConsumerState<BattlePage> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: AppTheme.primary.withOpacity(0.1),
-                          border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                          border: Border.all(
+                              color: AppTheme.primary.withOpacity(0.3)),
                         ),
-                        child: const Icon(LucideIcons.wand2, color: AppTheme.primary, size: 20),
+                        child: const Icon(LucideIcons.wand2,
+                            color: AppTheme.primary, size: 20),
                       ),
                     ],
                   ),
@@ -350,8 +441,10 @@ class _BattlePageState extends ConsumerState<BattlePage> {
           ),
         );
       },
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(body: Center(child: Text('Match Error: $e'))),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) =>
+          Scaffold(body: Center(child: Text('Match Error: $e'))),
     );
   }
 }

@@ -1,44 +1,31 @@
 {
   "rules": {
-    "users": {
-      "$uid": {
-        ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid"
-      }
-    },
-    "matchmaking_queue": {
-      "$uid": {
-        ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid"
-      }
-    },
+    ".read": false,
+    ".write": false,
+
     "active_states": {
       "$matchId": {
         ".read": "auth != null",
-        ".write": "auth != null",
-        "p1_vibe": { ".read": "auth != null" },
-        "p2_vibe": { ".read": "auth != null" },
-        "status": { ".read": "auth != null" },
-        "winner_uid": { ".read": "auth != null" }
+        ".write": false,
+
+        "is_typing": {
+          ".write": "auth != null",
+          ".validate": "(newData.isString() && newData.val().length <= 128) || !newData.exists()"
+        }
       }
     },
-    "live_matches": {
-      "$matchId": {
-        "status": { ".read": "auth != null" },
-        "player_ids": { ".read": "auth != null" },
-        "winner_id": { ".read": "auth != null" },
-        "target_phrase": { ".read": "auth != null" },
-        "players": {
-          "$playerId": {
-            ".read": "auth != null && auth.uid == $playerId",
-            ".write": "auth != null && auth.uid == $playerId",
-            "rizz_score": { ".read": "auth != null" },
-            "is_winner": { ".read": "auth != null" },
-            "messages": {
-              ".read": "auth != null && auth.uid == $playerId",
-              ".write": "auth != null && auth.uid == $playerId"
-            }
-          }
+
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['is_online', 'last_seen'])",
+
+        "is_online": {
+          ".validate": "newData.isBoolean()"
+        },
+        "last_seen": {
+          ".validate": "newData.isNumber()"
         }
       }
     }

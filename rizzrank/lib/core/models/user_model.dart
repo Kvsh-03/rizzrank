@@ -3,7 +3,10 @@ import 'package:firebase_database/firebase_database.dart';
 
 /// User profile model for Firestore users collection and RTDB compatibility.
 /// Firestore path: users/{uid}
-/// RTDB path: users/{uid} (legacy)
+///
+/// Server-managed fields (Cloud Functions only):
+///   elo_rating, total_games, wins, losses, active_match_id, leaderboard_rank.
+/// Client-managed fields: display_name, rizz_title, preferred_gender, last_played.
 class AppUser {
   final String uid;
   final String displayName;
@@ -12,7 +15,11 @@ class AppUser {
   final int totalGames;
   final int wins;
   final int losses;
+  final DateTime? lastPlayed;
   final int? createdAt;
+  final String? activeMatchId;
+  final String? preferredGender;
+  final int? leaderboardRank;
 
   const AppUser({
     required this.uid,
@@ -22,10 +29,13 @@ class AppUser {
     this.totalGames = 0,
     this.wins = 0,
     this.losses = 0,
+    this.lastPlayed,
     this.createdAt,
+    this.activeMatchId,
+    this.preferredGender,
+    this.leaderboardRank,
   });
 
-  /// Parses from Firestore DocumentSnapshot.
   factory AppUser.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
     final uid = doc.id;
@@ -35,7 +45,6 @@ class AppUser {
     return AppUser.fromMap(uid, data);
   }
 
-  /// Parses from RTDB DataSnapshot (legacy).
   factory AppUser.fromSnapshot(DataSnapshot snapshot) {
     final uid = snapshot.key ?? '';
     final value = snapshot.value;
@@ -47,17 +56,37 @@ class AppUser {
   }
 
   factory AppUser.fromMap(String uid, Map<String, dynamic> map) {
+    DateTime? lastPlayed;
+    final lpRaw = map['last_played'] ?? map['lastPlayed'];
+    if (lpRaw is Timestamp) {
+      lastPlayed = lpRaw.toDate();
+    } else if (lpRaw is int) {
+      lastPlayed = DateTime.fromMillisecondsSinceEpoch(lpRaw);
+    }
+
     return AppUser(
       uid: uid,
-      displayName: map['display_name'] as String? ?? map['displayName'] as String? ?? '',
-      rizzTitle: map['rizz_title'] as String? ?? map['rizzTitle'] as String? ?? 'Rookie',
+      displayName:
+          map['display_name'] as String? ?? map['displayName'] as String? ?? '',
+      rizzTitle:
+          map['rizz_title'] as String? ?? map['rizzTitle'] as String? ?? 'Rookie',
       eloRating: _parseInt(map['elo_rating'] ?? map['elo'], 1000),
       totalGames: _parseInt(map['total_games'] ?? map['totalMatches'], 0),
       wins: _parseInt(map['wins'], 0),
       losses: _parseInt(map['losses'], 0),
+      lastPlayed: lastPlayed,
       createdAt: map['created_at'] != null || map['createdAt'] != null
           ? _parseInt(map['created_at'] ?? map['createdAt'], 0)
           : null,
+      activeMatchId:
+          map['active_match_id'] as String? ?? map['activeMatchId'] as String?,
+      preferredGender:
+          map['preferred_gender'] as String? ?? map['preferredGender'] as String?,
+      leaderboardRank: map['leaderboard_rank'] != null
+          ? _parseInt(map['leaderboard_rank'], 0)
+          : map['leaderboardRank'] != null
+              ? _parseInt(map['leaderboardRank'], 0)
+              : null,
     );
   }
 
@@ -68,7 +97,7 @@ class AppUser {
     return int.tryParse(value.toString()) ?? fallback;
   }
 
-  /// Firestore field names (snake_case for consistency with security rules).
+  /// Full Firestore representation (used by Cloud Functions / Admin SDK).
   Map<String, dynamic> toFirestore() {
     return {
       'display_name': displayName,
@@ -77,7 +106,24 @@ class AppUser {
       'total_games': totalGames,
       'wins': wins,
       'losses': losses,
+      'last_played': lastPlayed != null
+          ? Timestamp.fromDate(lastPlayed!)
+          : FieldValue.serverTimestamp(),
       if (createdAt != null) 'created_at': createdAt,
+      if (activeMatchId != null) 'active_match_id': activeMatchId,
+      if (preferredGender != null) 'preferred_gender': preferredGender,
+      if (leaderboardRank != null) 'leaderboard_rank': leaderboardRank,
+    };
+  }
+
+  /// Client-safe Firestore write -- excludes server-managed fields
+  /// (elo_rating, total_games, wins, losses, active_match_id, leaderboard_rank).
+  Map<String, dynamic> toClientFirestore() {
+    return {
+      'display_name': displayName,
+      'rizz_title': rizzTitle,
+      'last_played': FieldValue.serverTimestamp(),
+      if (preferredGender != null) 'preferred_gender': preferredGender,
     };
   }
 
@@ -91,7 +137,11 @@ class AppUser {
     int? totalGames,
     int? wins,
     int? losses,
+    DateTime? lastPlayed,
     int? createdAt,
+    String? activeMatchId,
+    String? preferredGender,
+    int? leaderboardRank,
   }) {
     return AppUser(
       uid: uid ?? this.uid,
@@ -101,7 +151,11 @@ class AppUser {
       totalGames: totalGames ?? this.totalGames,
       wins: wins ?? this.wins,
       losses: losses ?? this.losses,
+      lastPlayed: lastPlayed ?? this.lastPlayed,
       createdAt: createdAt ?? this.createdAt,
+      activeMatchId: activeMatchId ?? this.activeMatchId,
+      preferredGender: preferredGender ?? this.preferredGender,
+      leaderboardRank: leaderboardRank ?? this.leaderboardRank,
     );
   }
 }

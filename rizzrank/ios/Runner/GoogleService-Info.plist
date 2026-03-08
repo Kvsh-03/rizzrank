@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>371372966416-nt8jo8om1g15i4kkmmsi10vi0g0c07j2.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.371372966416-nt8jo8om1g15i4kkmmsi10vi0g0c07j2</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBWkA5bVVI5CUoDKYbpVennn3taoAkKRnA</string>
+	<key>GCM_SENDER_ID</key>
+	<string>371372966416</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.rizzrank</string>
+	<key>PROJECT_ID</key>
+	<string>rizzrank-f52cd</string>
+	<key>STORAGE_BUCKET</key>
+	<string>rizzrank-f52cd.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:371372966416:ios:be2c393dc9e3e2e26f4095</string>
+	<key>DATABASE_URL</key>
+	<string>https://rizzrank-f52cd-default-rtdb.firebaseio.com</string>
+</dict>
+</plist>

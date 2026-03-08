@@ -9,7 +9,6 @@ import '../models/user_model.dart';
 import 'firebase_providers.dart';
 import 'match_providers.dart';
 
-/// Mock Firebase User for UI walk-through without real auth.
 final _mockFirebaseUser = MockUser(
   uid: 'mock-uid-123',
   email: 'mock@rizzrank.dev',
@@ -17,7 +16,6 @@ final _mockFirebaseUser = MockUser(
   isAnonymous: false,
 );
 
-/// Mock AppUser for Dashboard and BattlePage.
 const _mockAppUser = AppUser(
   uid: 'mock-uid-123',
   displayName: 'Mock Player',
@@ -29,65 +27,50 @@ const _mockAppUser = AppUser(
   createdAt: 1700000000,
 );
 
-/// Mock GameMatch for BattlePage live match display.
-GameMatch _mockGameMatch(String matchId) => GameMatch(
+ActiveMatchState _mockActiveMatch(String matchId) => ActiveMatchState(
       matchId: matchId,
       status: 'active',
       aiCharacterId: 'luna',
-      playerIds: ['mock-uid-123', 'ai-opponent'],
+      playerIds: const ['mock-uid-123', 'ai-opponent'],
       targetPhrase: 'Make them laugh',
-      players: {
-        'mock-uid-123': const PlayerState(
-          uid: 'mock-uid-123',
-          displayName: 'Mock Player',
-          rizzScore: 65,
-          isWinner: false,
-        ),
-        'ai-opponent': const PlayerState(
-          uid: 'ai-opponent',
-          displayName: 'Luna',
-          rizzScore: 72,
-          isWinner: false,
-        ),
-      },
+      p1Vibe: 65,
+      p2Vibe: 72,
     );
 
-/// Mock FirestoreMatch for BattlePage completion listener.
 FirestoreMatch _mockFirestoreMatch(String matchId) => FirestoreMatch(
       matchId: matchId,
-      playerIds: ['mock-uid-123', 'ai-opponent'],
+      playerIds: const ['mock-uid-123', 'ai-opponent'],
       status: 'active',
       targetPhrase: 'Make them laugh',
       aiCharacterId: 'luna',
     );
 
-/// Mock chat messages for BattlePage.
 final _mockMessages = [
   const ChatMessage(
     key: 'msg1',
-    role: 'ai',
-    text: "Hey! I've been thinking about that film we discussed. What's your take on the ending?",
+    senderUid: 'ai_luna',
+    role: 'model',
+    content: "Hey! I've been thinking about that film we discussed. What's your take on the ending?",
     timestamp: 1700000000,
-    rizzDelta: null,
   ),
   const ChatMessage(
     key: 'msg2',
+    senderUid: 'mock-uid-123',
     role: 'user',
-    text: "I thought it was ambiguous on purpose – leaves room for interpretation.",
+    content: "I thought it was ambiguous on purpose – leaves room for interpretation.",
     timestamp: 1700000010,
     rizzDelta: 5,
   ),
   const ChatMessage(
     key: 'msg3',
-    role: 'ai',
-    text: "Exactly! That's what makes it memorable. Not everything needs a neat resolution.",
+    senderUid: 'ai_luna',
+    role: 'model',
+    content: "Exactly! That's what makes it memorable. Not everything needs a neat resolution.",
     timestamp: 1700000020,
-    rizzDelta: null,
   ),
 ];
 
 /// Provider overrides for UI walk-through without Firebase.
-/// Use with ProviderScope(overrides: mockProviderOverrides).
 List<Override> get mockProviderOverrides => [
       firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
       authStateProvider.overrideWith(
@@ -97,7 +80,7 @@ List<Override> get mockProviderOverrides => [
         (ref) => Stream.value(_mockAppUser),
       ),
       liveMatchStreamProvider.overrideWith(
-        (ref, matchId) => Stream.value(_mockGameMatch(matchId)),
+        (ref, matchId) => Stream.value(_mockActiveMatch(matchId)),
       ),
       firestoreMatchStreamProvider.overrideWith(
         (ref, matchId) => Stream.value(_mockFirestoreMatch(matchId)),

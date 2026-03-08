@@ -60,7 +60,7 @@ class ChatBubble extends StatelessWidget {
                       boxShadow: AppTheme.glowPrimary,
                     ),
                     child: Text(
-                      message.text,
+                      message.content,
                       style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
                     ),
                   )
@@ -73,7 +73,7 @@ class ChatBubble extends StatelessWidget {
                       bottomRight: Radius.circular(16),
                     ),
                     child: Text(
-                      message.text,
+                      message.content,
                       style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
                     ),
                   ),

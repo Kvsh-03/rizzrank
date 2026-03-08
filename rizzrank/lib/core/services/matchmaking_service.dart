@@ -1,112 +1,53 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/firestore_match_model.dart';
-import '../models/user_model.dart';
 
-/// Matchmaking service using Firestore transactions to prevent double-matching.
-/// Collection: matchmaking (queue)
-/// ELO range: +/- 100
+/// Server-side matchmaking service.
+///
+/// All queue operations run on Cloud Functions (Admin SDK) to prevent
+/// double-matching and ensure clients cannot forge match documents.
 class MatchmakingService {
-  MatchmakingService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  MatchmakingService({
+    FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
-  static const String _matchmakingCollection = 'matchmaking';
-  static const String _matchesCollection = 'matches';
-  static const int _eloRange = 100;
+  /// Calls the server-side findMatch callable.
+  /// Returns a [FirestoreMatch] if immediately matched, or null if queued.
+  Future<FirestoreMatch?> findMatch() async {
+    final callable = _functions.httpsCallable('findMatch');
+    final result = await callable.call<Map<String, dynamic>>();
 
-  /// Finds a match. Uses a Firestore transaction to prevent double-matching.
-  /// - If a compatible user (within +/- 100 ELO) exists: pair, delete both from queue, create match.
-  /// - If none: add self to queue and return null.
-  /// Returns [FirestoreMatch] if matched, null if queued.
-  Future<FirestoreMatch?> findMatch(AppUser user) async {
-    return _firestore.runTransaction<FirestoreMatch?>((transaction) async {
-      final myElo = user.eloRating;
-      final minElo = myElo - _eloRange;
-      final maxElo = myElo + _eloRange;
-
-      // Query queue by timestamp (FIFO), filter ELO range in memory to avoid compound index
-      final snapshot = await _firestore
-          .collection(_matchmakingCollection)
-          .orderBy('timestamp', descending: false)
-          .limit(50)
-          .get();
-
-      // Find first user in ELO range that is not self
-      DocumentSnapshot<Map<String, dynamic>>? opponentDoc;
-      for (final doc in snapshot.docs) {
-        if (doc.id == user.uid) continue;
-        final data = doc.data();
-        final opponentElo = (data['elo_rating'] as num?)?.toInt() ?? 1000;
-        if (opponentElo >= minElo && opponentElo <= maxElo) {
-          opponentDoc = doc as DocumentSnapshot<Map<String, dynamic>>;
-          break;
-        }
+    final data = result.data;
+    if (data['matched'] == true && data['matchId'] != null) {
+      final matchId = data['matchId'] as String;
+      // Fetch the full match doc created by the server
+      final doc = await _firestore.collection('matches').doc(matchId).get();
+      if (doc.exists && doc.data() != null) {
+        return FirestoreMatch.fromFirestore(doc);
       }
-
-      if (opponentDoc == null || !opponentDoc.exists) {
-        // No compatible opponent: add self to queue
-        final queueRef = _firestore.collection(_matchmakingCollection).doc(user.uid);
-        transaction.set(queueRef, {
-          'display_name': user.displayName,
-          'elo_rating': user.eloRating,
-          'rizz_title': user.rizzTitle,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-        return null;
-      }
-
-      final opponentUid = opponentDoc.id;
-      final opponentData = opponentDoc.data();
-      if (opponentData == null) return null;
-
-      // Create match document
-      final matchRef = _firestore.collection(_matchesCollection).doc();
-      final matchId = matchRef.id;
-      final playerIds = [user.uid, opponentUid];
-
-      transaction.set(matchRef, {
-        'player_ids': playerIds,
-        'winner_id': null,
-        'status': 'active',
-        'target_phrase': '',
-        'ai_character_id': 'luna',
-        'created_at': FieldValue.serverTimestamp(),
-      });
-
-      // Remove both from queue
-      transaction.delete(_firestore.collection(_matchmakingCollection).doc(user.uid));
-      transaction.delete(_firestore.collection(_matchmakingCollection).doc(opponentUid));
-
-      return FirestoreMatch(
-        matchId: matchId,
-        playerIds: playerIds,
-        winnerId: null,
-        status: 'active',
-        targetPhrase: '',
-        aiCharacterId: 'luna',
-        createdAt: DateTime.now(),
-      );
-    });
+      // Fallback: return a minimal match with just the ID
+      return FirestoreMatch(matchId: matchId, playerIds: [], status: 'active');
+    }
+    return null;
   }
 
-  /// Removes the current user from the matchmaking queue (cancel).
-  Future<void> leaveQueue(String uid) async {
-    await _firestore.collection(_matchmakingCollection).doc(uid).delete();
+  /// Cancels matchmaking by calling the leaveQueue callable.
+  Future<void> leaveQueue() async {
+    final callable = _functions.httpsCallable('leaveQueue');
+    await callable.call();
   }
 
-  /// Checks if user is currently in the queue.
-  Future<bool> isInQueue(String uid) async {
-    final doc = await _firestore.collection(_matchmakingCollection).doc(uid).get();
-    return doc.exists;
-  }
-
-  /// Listens for a match to be created for this user (e.g. when opponent joins).
-  /// Polls matches collection for documents where player_ids contains uid.
+  /// Listens for a match to be created for this user (when opponent pairs with them).
+  /// Used when findMatch returns null (queued) to detect pairing by another player's call.
   Stream<FirestoreMatch?> watchForMatch(String uid) {
     return _firestore
-        .collection(_matchesCollection)
+        .collection('matches')
         .where('player_ids', arrayContains: uid)
         .where('status', isEqualTo: 'active')
         .orderBy('created_at', descending: true)
@@ -114,10 +55,7 @@ class MatchmakingService {
         .snapshots()
         .map((snap) {
       if (snap.docs.isEmpty) return null;
-      final doc = snap.docs.first;
-      return FirestoreMatch.fromFirestore(
-        doc as DocumentSnapshot<Map<String, dynamic>>,
-      );
+      return FirestoreMatch.fromFirestore(snap.docs.first);
     });
   }
 }

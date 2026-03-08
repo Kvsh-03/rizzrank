@@ -1,19 +1,28 @@
 /**
  * RizzRank Date Race - Cloud Functions
  *
- * Trigger: onUserMessageSent - fires on Firestore writes to matches/{matchId}/chat
- * Pipeline:
- *   1. OpenRouter (Llama 3.1 70B) generates AI reply
- *   2. Gemini Flash-Lite judges the user message (0-15 rizz score)
- *   3. RTDB active_states/{matchId}/p1_vibe or p2_vibe is updated
- *   4. If vibe > 100: win instruction injected, date-ask detection triggers match end
+ * Exports:
+ *   - onUserMessageSent: Firestore trigger on matches/{matchId}/chat/{messageId}
+ *   - findMatch, leaveQueue: HTTPS callables for matchmaking
+ *   - cleanupExpiredMatchmaking: Scheduled cleanup
+ *   - checkMatchTimeouts: Scheduled match timeout enforcement (every 30s)
+ *
+ * Pipeline (onUserMessageSent):
+ *   1. Read AI character from Firestore ai_models collection (fallback to hardcoded)
+ *   2. OpenRouter (Llama 3.1 70B) generates AI reply
+ *   3. Gemini Flash-Lite judges the user message (0-15 rizz score)
+ *   4. RTDB active_states/{matchId}/p1_vibe or p2_vibe is updated
+ *   5. If vibe > 100 and date-ask detected: finalizeMatch is called
  */
 
 import * as admin from "firebase-admin";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineString } from "firebase-functions/params";
 import { getAIResponse, WIN_THRESHOLD } from "./openRouterService";
 import { scoreMessage } from "./geminiJudge";
+import { getCharacter } from "./characters";
+import { finalizeMatch, drawMatch } from "./finalizeMatch";
 
 admin.initializeApp();
 
@@ -22,6 +31,34 @@ const rtdb = admin.database();
 
 const openrouterKey = defineString("OPENROUTER_API_KEY");
 const geminiKey = defineString("GEMINI_API_KEY");
+
+// Re-export matchmaking callables
+export { findMatch, leaveQueue } from "./matchmaking";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: load AI character from Firestore ai_models, falling back to hardcoded
+// ─────────────────────────────────────────────────────────────────────────────
+interface AICharacterConfig {
+  systemInstruction: string;
+  description: string;
+}
+
+async function loadCharacter(characterId: string): Promise<AICharacterConfig> {
+  const doc = await db.doc(`ai_models/${characterId}`).get();
+  if (doc.exists) {
+    const data = doc.data()!;
+    return {
+      systemInstruction: (data.system_prompt as string) ?? "",
+      description: (data.personality_summary as string) ?? "",
+    };
+  }
+  // Fallback to hardcoded characters.ts
+  const fallback = getCharacter(characterId);
+  return {
+    systemInstruction: fallback.systemInstruction,
+    description: fallback.description,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Firestore trigger: matches/{matchId}/chat/{messageId}
@@ -39,11 +76,12 @@ export const onUserMessageSent = onDocumentCreated(
 
     const matchId = event.params.matchId;
     const messageId = event.params.messageId;
-    const senderUid = data.sender_uid as string;
-    const userText = data.text as string;
+    const senderUid = (data.sender_uid as string) || "";
+    // Support both "content" (new) and "text" (legacy) field names
+    const userText = (data.content as string) || (data.text as string) || "";
 
     if (!senderUid || !userText) {
-      console.warn(`Missing sender_uid or text on ${matchId}/chat/${messageId}`);
+      console.warn(`Missing sender_uid or content on ${matchId}/chat/${messageId}`);
       return;
     }
 
@@ -54,6 +92,10 @@ export const onUserMessageSent = onDocumentCreated(
       return;
     }
     const matchData = matchDoc.data()!;
+    if (matchData.status !== "active") {
+      console.warn(`Match ${matchId} status is '${matchData.status}', ignoring message`);
+      return;
+    }
     const characterId = (matchData.ai_character_id as string) || "luna";
     const playerIds: string[] = matchData.player_ids || [];
 
@@ -65,19 +107,21 @@ export const onUserMessageSent = onDocumentCreated(
     }
     const vibeKey = playerIndex === 0 ? "p1_vibe" : "p2_vibe";
 
+    // ── Load AI character config ─────────────────────────────────────────
+    const character = await loadCharacter(characterId);
+
     // ── Read current vibe from RTDB ──────────────────────────────────────
     const vibeRef = rtdb.ref(`active_states/${matchId}/${vibeKey}`);
     const vibeSnap = await vibeRef.get();
     const currentVibe: number = vibeSnap.val() ?? 0;
 
-    // ── Build chat history from Firestore (this player's messages only) ──
+    // ── Build chat history from Firestore (this player's conversation) ───
     const chatSnap = await db
       .collection(`matches/${matchId}/chat`)
       .where("sender_uid", "==", senderUid)
       .orderBy("timestamp", "asc")
       .get();
 
-    // Also get AI replies to this player
     const aiRepliesSnap = await db
       .collection(`matches/${matchId}/chat`)
       .where("target_uid", "==", senderUid)
@@ -85,14 +129,13 @@ export const onUserMessageSent = onDocumentCreated(
       .orderBy("timestamp", "asc")
       .get();
 
-    // Merge and sort all messages for this player's conversation lane
     interface MergedMsg { role: string; text: string; _ts: number }
     const allDocs: MergedMsg[] = [...chatSnap.docs, ...aiRepliesSnap.docs]
       .map((d) => {
         const dd = d.data();
         return {
           role: (dd.role as string) || "user",
-          text: (dd.text as string) || "",
+          text: (dd.content as string) || (dd.text as string) || "",
           _ts: dd.timestamp?.toMillis?.() ?? 0,
         };
       })
@@ -103,7 +146,6 @@ export const onUserMessageSent = onDocumentCreated(
       text: d.text,
     }));
 
-    // Find the last AI message for judge context
     const lastAIMsg =
       [...allDocs].reverse().find((d) => d.role === "model")?.text ?? "";
 
@@ -116,7 +158,7 @@ export const onUserMessageSent = onDocumentCreated(
     // ── Write AI reply to Firestore chat subcollection ───────────────────
     await db.collection(`matches/${matchId}/chat`).add({
       role: "model",
-      text: aiResult.text,
+      content: aiResult.text,
       sender_uid: `ai_${characterId}`,
       target_uid: senderUid,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -141,37 +183,86 @@ export const onUserMessageSent = onDocumentCreated(
     // ── Win detection: if AI asked for a date, finalize the match ────────
     if (aiResult.isDateAsk && updatedVibe > WIN_THRESHOLD) {
       console.log(`[${matchId}] WINNER: ${senderUid}`);
-
-      // Update Firestore match document
-      await db.doc(`matches/${matchId}`).update({
-        status: "completed",
-        winner_id: senderUid,
-      });
-
-      // Update RTDB active state
-      await rtdb.ref(`active_states/${matchId}`).update({
-        status: "completed",
-        winner_uid: senderUid,
-      });
-
-      // Update player ELO in Firestore
-      const winnerRef = db.doc(`users/${senderUid}`);
-      await winnerRef.update({
-        elo_rating: admin.firestore.FieldValue.increment(25),
-        wins: admin.firestore.FieldValue.increment(1),
-        total_games: admin.firestore.FieldValue.increment(1),
-      });
-
-      // Update loser ELO
-      const loserUid = playerIds.find((id) => id !== senderUid);
-      if (loserUid) {
-        const loserRef = db.doc(`users/${loserUid}`);
-        await loserRef.update({
-          elo_rating: admin.firestore.FieldValue.increment(-12),
-          losses: admin.firestore.FieldValue.increment(1),
-          total_games: admin.firestore.FieldValue.increment(1),
-        });
-      }
+      await finalizeMatch({ matchId, winnerUid: senderUid, playerIds });
     }
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduled: cleanup expired matchmaking entries every 5 minutes
+// ─────────────────────────────────────────────────────────────────────────────
+export const cleanupExpiredMatchmaking = onSchedule("every 5 minutes", async () => {
+  const now = Date.now();
+  const expired = await db
+    .collection("matchmaking")
+    .where("expire_at", "<", now)
+    .get();
+
+  if (expired.empty) {
+    console.log("[cleanup] No expired matchmaking entries");
+    return;
+  }
+
+  const batch = db.batch();
+  for (const doc of expired.docs) {
+    batch.delete(doc.ref);
+  }
+  await batch.commit();
+  console.log(`[cleanup] Removed ${expired.size} expired matchmaking entries`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduled: enforce match timeouts every 30 seconds.
+// If a match has expired, the player with the higher vibe wins.
+// On a tie, it's a draw with no ELO change.
+// ─────────────────────────────────────────────────────────────────────────────
+export const checkMatchTimeouts = onSchedule("every 1 minutes", async () => {
+  const now = admin.firestore.Timestamp.now();
+  const expired = await db
+    .collection("matches")
+    .where("status", "==", "active")
+    .where("expires_at", "<=", now)
+    .limit(20)
+    .get();
+
+  if (expired.empty) {
+    return;
+  }
+
+  console.log(`[timeout] Processing ${expired.size} expired matches`);
+
+  for (const matchDoc of expired.docs) {
+    const data = matchDoc.data();
+    const matchId = matchDoc.id;
+    const playerIds: string[] = data.player_ids || [];
+
+    if (playerIds.length < 2) {
+      console.warn(`[timeout] Match ${matchId} has fewer than 2 players, skipping`);
+      continue;
+    }
+
+    try {
+      const stateSnap = await rtdb.ref(`active_states/${matchId}`).get();
+      const state = stateSnap.val();
+      const p1Vibe: number = state?.p1_vibe ?? 0;
+      const p2Vibe: number = state?.p2_vibe ?? 0;
+
+      if (p1Vibe > p2Vibe) {
+        console.log(`[timeout] ${matchId}: P1 wins by meter (${p1Vibe} vs ${p2Vibe})`);
+        await finalizeMatch({ matchId, winnerUid: playerIds[0], playerIds });
+        await matchDoc.ref.update({ status: "timed_out" });
+        await rtdb.ref(`active_states/${matchId}`).update({ status: "timed_out" });
+      } else if (p2Vibe > p1Vibe) {
+        console.log(`[timeout] ${matchId}: P2 wins by meter (${p2Vibe} vs ${p1Vibe})`);
+        await finalizeMatch({ matchId, winnerUid: playerIds[1], playerIds });
+        await matchDoc.ref.update({ status: "timed_out" });
+        await rtdb.ref(`active_states/${matchId}`).update({ status: "timed_out" });
+      } else {
+        console.log(`[timeout] ${matchId}: Draw (both at ${p1Vibe})`);
+        await drawMatch(matchId, playerIds);
+      }
+    } catch (err) {
+      console.error(`[timeout] Error processing match ${matchId}:`, err);
+    }
+  }
+});

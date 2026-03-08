@@ -6,6 +6,7 @@ class AICharacter {
   final String role;
   final String description;
   final String avatarUrl;
+  final int difficulty;
 
   const AICharacter({
     required this.id,
@@ -13,6 +14,7 @@ class AICharacter {
     required this.role,
     required this.description,
     required this.avatarUrl,
+    this.difficulty = 3,
   });
 }
 
@@ -24,6 +26,7 @@ const List<AICharacter> kAICharacters = [
     description: 'Moody & Articulate. Loves 70s noir and niche cinematography.',
     avatarUrl:
         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200',
+    difficulty: 3,
   ),
   AICharacter(
     id: 'atlas',
@@ -32,6 +35,7 @@ const List<AICharacter> kAICharacters = [
     description: 'Logical but curious about human emotion.',
     avatarUrl:
         'https://images.unsplash.com/photo-1546776310-eef45dd6d63c?auto=format&fit=crop&q=80&w=200&h=200',
+    difficulty: 4,
   ),
   AICharacter(
     id: 'zephyr',
@@ -40,6 +44,7 @@ const List<AICharacter> kAICharacters = [
     description: 'Fast-paced, high energy, and loves competition.',
     avatarUrl:
         'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=200&h=200',
+    difficulty: 2,
   ),
 ];
 

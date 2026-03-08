@@ -32,6 +32,31 @@ No two matches are the same. AI agents are initialized with randomized traits (e
 
 All critical logic (ELO updates, win verification, and secret phrase detection) is handled via Firebase Cloud Functions. Firestore Security Rules prevent players from manually editing their scores or snooping on their opponent's chat.
 
+## Firebase Setup & Development
+
+From the project root (`rizzrank/`):
+
+```bash
+# 1. Generate firebase_options.dart (run once, or after adding new platforms)
+dart pub global run flutterfire_cli:flutterfire configure --platforms=android,ios,macos
+
+# 2. Build Cloud Functions
+cd functions && npm install && npm run build
+
+# 3. Start emulators (local dev)
+cd .. && firebase emulators:start
+
+# 4. Run Flutter app with emulators (in a separate terminal)
+flutter run --dart-define=USE_EMULATORS=true
+
+# 5. Deploy to production (when ready)
+firebase deploy
+```
+
+**Prerequisites:** Firebase CLI (`firebase`), FlutterFire CLI (`dart pub global activate flutterfire_cli`). If `flutterfire` isn't found, add `export PATH="$PATH:$HOME/.pub-cache/bin"` to your shell config, or use `dart pub global run flutterfire_cli:flutterfire` instead. Ensure `.firebaserc` has your Firebase project ID.
+
+**Cloud Functions secrets** (required for deploy): Set `OPENROUTER_API_KEY` and `GEMINI_API_KEY` via `firebase functions:secrets:set`.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
