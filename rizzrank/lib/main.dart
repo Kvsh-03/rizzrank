@@ -24,28 +24,27 @@ void main() async {
   if (kDebugMode && useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8081);
-    // Disable persistence for emulators to avoid LevelDB LOCK issues during multi-instance testing
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: false,
     );
     FirebaseDatabase.instance.useDatabaseEmulator('localhost', 9001);
     FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
   } else {
-    // When switching from emulator to production, a stale emulator auth token
-    // may be cached locally. Validate it with a lightweight Firestore read;
-    // if it fails with permission-denied, sign out so the user gets a fresh
-    // production login.
+    // Disable LevelDB persistence on all platforms to avoid stale lock files
+    // that cause "invalid reuse after initialization failure" on iOS restart.
+    // This matches the iOS AppDelegate's MemoryCacheSettings() configuration.
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: false,
+    );
+
+    // If a cached auth token exists from a previous emulator or expired
+    // session, validate it. If invalid, sign out for a fresh login.
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
       try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser.uid)
-            .get();
-      } on FirebaseException catch (e) {
-        if (e.code == 'permission-denied') {
-          await FirebaseAuth.instance.signOut();
-        }
+        await currentUser.getIdToken(true);
+      } catch (_) {
+        await FirebaseAuth.instance.signOut();
       }
     }
   }
