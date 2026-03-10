@@ -1,12 +1,9 @@
 "use strict";
 /**
- * RTDB-based matchmaking: joinQueue and leaveQueue.
+ * RTDB-based matchmaking: joinQueue, leaveQueue, and findMatch.
  *
- * joinQueue: Adds user to RTDB matchmaking_queue/{preference}/{uid}.
- *   - Rejects if active_match_id is set.
- *   - Default preferred_gender = opposite of gender (Man->Woman, Woman->Man, Other->Other).
- *
- * leaveQueue: Removes user from queue. Uses matchmaking_queue_index/{uid} to find preference.
+ * Global queue structure: matchmaking_queue/{uid}
+ * Index for preference lookup: matchmaking_queue_index/{uid}
  *
  * Matching is triggered by onQueueWrite in matchmakingMatcher.ts.
  */
@@ -44,7 +41,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.leaveQueue = exports.joinQueue = void 0;
+exports.leaveQueue = exports.joinQueue = exports.findMatch = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -54,7 +51,7 @@ function getDefaultPreferredGender(gender) {
         return "Woman"; // fallback
     return gender === "Man" ? "Woman" : gender === "Woman" ? "Man" : "Other";
 }
-exports.joinQueue = (0, https_1.onCall)(async (request) => {
+exports.findMatch = (0, https_1.onCall)(async (request) => {
     const db = admin.firestore();
     const rtdb = admin.database();
     if (!request.auth) {
@@ -84,11 +81,13 @@ exports.joinQueue = (0, https_1.onCall)(async (request) => {
         display_name: displayName,
         timestamp: now,
         expire_at: expireAt,
+        preferredGender,
     };
-    await rtdb.ref(`matchmaking_queue/${preferredGender}/${uid}`).set(queueEntry);
+    await rtdb.ref(`matchmaking_queue/${uid}`).set(queueEntry);
     await rtdb.ref(`matchmaking_queue_index/${uid}`).set(preferredGender);
     return { success: true, preference: preferredGender };
 });
+exports.joinQueue = exports.findMatch;
 /**
  * Removes the caller from the matchmaking queue (cancel).
  */
@@ -98,11 +97,13 @@ exports.leaveQueue = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError("unauthenticated", "Must be signed in.");
     }
     const uid = request.auth.uid;
-    const indexSnap = await rtdb.ref(`matchmaking_queue_index/${uid}`).get();
-    const preference = indexSnap.val();
-    if (preference) {
-        await rtdb.ref(`matchmaking_queue/${preference}/${uid}`).remove();
+    try {
+        await rtdb.ref(`matchmaking_queue/${uid}`).remove();
         await rtdb.ref(`matchmaking_queue_index/${uid}`).remove();
+        await rtdb.ref(`matchmaking_matches/${uid}`).remove();
+    }
+    catch (error) {
+        console.error(`[leaveQueue] Error removing ${uid} from queue:`, error);
     }
     return { success: true };
 });

@@ -42,6 +42,7 @@ const admin = __importStar(require("firebase-admin"));
 const database_1 = require("firebase-functions/v2/database");
 const finalizeMatch_1 = require("./finalizeMatch");
 const db = admin.firestore();
+const GRACE_PERIOD_MS = 30000; // 30 seconds
 exports.onPresenceOffline = (0, database_1.onValueUpdated)("presence/{uid}", async (event) => {
     const after = event.data.after.val();
     if (after?.is_online !== false)
@@ -53,6 +54,16 @@ exports.onPresenceOffline = (0, database_1.onValueUpdated)("presence/{uid}", asy
     const activeMatchId = userDoc.data()?.active_match_id || "";
     if (!activeMatchId)
         return;
+    // Wait grace period to tolerate brief disconnects (iOS background, network blips)
+    await new Promise((resolve) => setTimeout(resolve, GRACE_PERIOD_MS));
+    // Re-check presence — user may have reconnected
+    const presenceSnap = await admin.database().ref(`presence/${uid}`).get();
+    const presenceVal = presenceSnap.val();
+    if (presenceVal?.is_online === true) {
+        console.log(`[onPresenceOffline] ${uid} reconnected within grace period, skipping forfeit`);
+        return;
+    }
+    // Re-check match status — may have already completed
     const matchDoc = await db.doc(`matches/${activeMatchId}`).get();
     if (!matchDoc.exists)
         return;
@@ -63,7 +74,7 @@ exports.onPresenceOffline = (0, database_1.onValueUpdated)("presence/{uid}", asy
     const opponentUid = playerIds.find((id) => id !== uid);
     if (!opponentUid)
         return;
-    console.log(`[onPresenceOffline] ${uid} went offline in match ${activeMatchId}, opponent ${opponentUid} wins`);
+    console.log(`[onPresenceOffline] ${uid} offline for ${GRACE_PERIOD_MS / 1000}s in match ${activeMatchId}, opponent ${opponentUid} wins`);
     await (0, finalizeMatch_1.finalizeMatch)({ matchId: activeMatchId, winnerUid: opponentUid, playerIds });
 });
 //# sourceMappingURL=onPresenceOffline.js.map

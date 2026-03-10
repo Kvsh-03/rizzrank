@@ -100,7 +100,10 @@ class _BattlePageState extends ConsumerState<BattlePage> {
       if (mounted) context.go('/results/defeat/${widget.matchId}');
     } catch (e) {
       if (mounted) {
-        setState(() => _isForfeiting = false);
+        setState(() {
+          _isForfeiting = false;
+          _hasForfeited = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Forfeit failed: $e')),
         );
@@ -142,10 +145,15 @@ class _BattlePageState extends ConsumerState<BattlePage> {
 
     // Navigate to results when match completes
     ref.listen(liveMatchStreamProvider(widget.matchId), (prev, next) {
+      if (_hasForfeited) return;
       final state = next.value;
-      if (state != null && state.isCompleted && state.winnerUid != null) {
-        final outcome = state.winnerUid == user.uid ? 'victory' : 'defeat';
-        context.go('/results/$outcome/${widget.matchId}');
+      if (state != null && state.isCompleted) {
+        if (state.winnerUid != null) {
+          final outcome = state.winnerUid == user.uid ? 'victory' : 'defeat';
+          context.go('/results/$outcome/${widget.matchId}');
+        } else {
+          context.go('/results/defeat/${widget.matchId}');
+        }
       }
     });
 

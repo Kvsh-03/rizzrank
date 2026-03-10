@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkMatchTimeouts = exports.seedTraits = exports.seedAiModels = exports.forfeitMatch = exports.onPresenceOffline = exports.onRTDBMessageSent = exports.onQueueWrite = exports.leaveQueue = exports.joinQueue = void 0;
+exports.cleanupExpiredQueueEntries = exports.checkMatchTimeouts = exports.seedTraits = exports.seedAiModels = exports.forfeitMatch = exports.onPresenceOffline = exports.onRTDBMessageSent = exports.onQueueWrite = exports.leaveQueue = exports.joinQueue = void 0;
 /**
  * Load .env from functions directory (for emulator/local).
  * Production uses Firebase secrets via defineString; .env is ignored when absent.
@@ -203,6 +203,36 @@ exports.checkMatchTimeouts = (0, scheduler_1.onSchedule)("every 1 minutes", asyn
         catch (err) {
             console.error(`[timeout] Error processing match ${matchId}:`, err);
         }
+    }
+});
+exports.cleanupExpiredQueueEntries = (0, scheduler_1.onSchedule)("every 1 minutes", async () => {
+    const now = Date.now();
+    try {
+        for (const pref of ["Man", "Woman", "Other", "Any"]) {
+            const queueRef = rtdb.ref(`matchmaking_queue/${pref}`);
+            const snap = await queueRef.once("value");
+            if (!snap.exists() || !snap.val())
+                continue;
+            const staleUids = [];
+            snap.forEach((child) => {
+                const data = child.val();
+                if (data && data.expire_at <= now) {
+                    staleUids.push(child.key);
+                }
+            });
+            if (staleUids.length === 0)
+                continue;
+            await Promise.all([
+                ...staleUids.map((uid) => rtdb.ref(`matchmaking_queue/${pref}/${uid}`).remove()),
+                ...staleUids.map((uid) => rtdb.ref(`matchmaking_queue_index/${uid}`).remove()),
+                ...staleUids.map((uid) => rtdb.ref(`matchmaking_matches/${uid}`).remove()),
+                ...staleUids.map((uid) => db.doc(`users/${uid}`).update({ active_match_id: null })),
+            ]);
+            console.log(`[cleanup] Removed ${staleUids.length} expired entries from ${pref}`);
+        }
+    }
+    catch (error) {
+        console.error("[cleanup] Error:", error);
     }
 });
 //# sourceMappingURL=index.js.map

@@ -32,6 +32,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { AI_CHARACTERS } from "./characters";
 import { finalizeMatch, drawMatch } from "./finalizeMatch";
+import { PREFERENCES } from "./matchmakingMatcher";
 
 admin.initializeApp();
 
@@ -178,5 +179,38 @@ export const checkMatchTimeouts = onSchedule("every 1 minutes", async () => {
     } catch (err) {
       console.error(`[timeout] Error processing match ${matchId}:`, err);
     }
+  }
+});
+
+export const cleanupExpiredQueueEntries = onSchedule("every 1 minutes", async () => {
+  const now = Date.now();
+  try {
+    for (const pref of ["Man", "Woman", "Other", "Any"]) {
+      const queueRef = rtdb.ref(`matchmaking_queue/${pref}`);
+      const snap = await queueRef.once("value");
+
+      if (!snap.exists() || !snap.val()) continue;
+
+      const staleUids: string[] = [];
+      snap.forEach((child) => {
+        const data = child.val();
+        if (data && (data.expire_at as number) <= now) {
+          staleUids.push(child.key!);
+        }
+      });
+
+      if (staleUids.length === 0) continue;
+
+      await Promise.all([
+        ...staleUids.map((uid) => rtdb.ref(`matchmaking_queue/${pref}/${uid}`).remove()),
+        ...staleUids.map((uid) => rtdb.ref(`matchmaking_queue_index/${uid}`).remove()),
+        ...staleUids.map((uid) => rtdb.ref(`matchmaking_matches/${uid}`).remove()),
+        ...staleUids.map((uid) => db.doc(`users/${uid}`).update({ active_match_id: null })),
+      ]);
+
+      console.log(`[cleanup] Removed ${staleUids.length} expired entries from ${pref}`);
+    }
+  } catch (error) {
+    console.error("[cleanup] Error:", error);
   }
 });

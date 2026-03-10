@@ -1,11 +1,8 @@
 /**
- * RTDB-based matchmaking: joinQueue and leaveQueue.
+ * RTDB-based matchmaking: joinQueue, leaveQueue, and findMatch.
  *
- * joinQueue: Adds user to RTDB matchmaking_queue/{preference}/{uid}.
- *   - Rejects if active_match_id is set.
- *   - Default preferred_gender = opposite of gender (Man->Woman, Woman->Man, Other->Other).
- *
- * leaveQueue: Removes user from queue. Uses matchmaking_queue_index/{uid} to find preference.
+ * Global queue structure: matchmaking_queue/{uid}
+ * Index for preference lookup: matchmaking_queue_index/{uid}
  *
  * Matching is triggered by onQueueWrite in matchmakingMatcher.ts.
  */
@@ -22,7 +19,7 @@ function getDefaultPreferredGender(gender: string | null): string {
   return gender === "Man" ? "Woman" : gender === "Woman" ? "Man" : "Other";
 }
 
-export const joinQueue = onCall(async (request) => {
+export const findMatch = onCall(async (request) => {
   const db = admin.firestore();
   const rtdb = admin.database();
   if (!request.auth) {
@@ -58,13 +55,16 @@ export const joinQueue = onCall(async (request) => {
     display_name: displayName,
     timestamp: now,
     expire_at: expireAt,
+    preferredGender,
   };
 
-  await rtdb.ref(`matchmaking_queue/${preferredGender}/${uid}`).set(queueEntry);
+  await rtdb.ref(`matchmaking_queue/${uid}`).set(queueEntry);
   await rtdb.ref(`matchmaking_queue_index/${uid}`).set(preferredGender);
 
   return { success: true, preference: preferredGender };
 });
+
+export const joinQueue = findMatch;
 
 /**
  * Removes the caller from the matchmaking queue (cancel).
@@ -76,12 +76,12 @@ export const leaveQueue = onCall(async (request) => {
   }
   const uid = request.auth.uid;
 
-  const indexSnap = await rtdb.ref(`matchmaking_queue_index/${uid}`).get();
-  const preference = indexSnap.val() as string | null;
-
-  if (preference) {
-    await rtdb.ref(`matchmaking_queue/${preference}/${uid}`).remove();
+  try {
+    await rtdb.ref(`matchmaking_queue/${uid}`).remove();
     await rtdb.ref(`matchmaking_queue_index/${uid}`).remove();
+    await rtdb.ref(`matchmaking_matches/${uid}`).remove();
+  } catch (error) {
+    console.error(`[leaveQueue] Error removing ${uid} from queue:`, error);
   }
 
   return { success: true };
